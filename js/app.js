@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const VER = "7";
+  const VER = "8";
   let state = Store.load();
   let deferredPrompt = null;
   let chatBusy = false;
@@ -373,14 +373,17 @@
           isFree
             ? `<p class="small muted" style="margin:12px 0 0;line-height:1.45">Ключ не нужен — пиши сразу. Может быть медленнее и с лимитом.</p>`
             : `<label class="field" style="margin-top:12px">Ключ OpenRouter
-          <input type="password" id="ai-key" value="${esc(keyValue)}" placeholder="sk-or-…" autocomplete="off" />
+          <textarea id="ai-key" rows="3" placeholder="Вставь сюда sk-or-… (можно длинно)" autocomplete="off" spellcheck="false" style="resize:vertical;min-height:72px;font-family:ui-monospace,monospace;font-size:13px;line-height:1.35">${esc(keyValue)}</textarea>
         </label>
-        <button type="button" class="btn secondary block" id="save-ai-key" style="margin-top:10px">Сохранить ключ</button>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
+          <button type="button" class="btn secondary block" id="paste-ai-key">Вставить</button>
+          <button type="button" class="btn secondary block" id="save-ai-key">Сохранить</button>
+        </div>
         <p class="small muted" style="margin:10px 0 0;line-height:1.45">
           ${
             hasKey
               ? "Ключ сохранён. Модель видит прайс, прогресс и историю."
-              : "Ключ: openrouter.ai/keys → Create key. Или переключись на «Бесплатный»."
+              : "На openrouter.ai создай ключ → Copy. Если Copy не жмётся: Create new key ещё раз, сразу жми Copy, потом сюда «Вставить». Или останься на «Бесплатный»."
           }
         </p>`
         }
@@ -592,6 +595,28 @@
       aiKey.addEventListener("change", () => {
         state.ai.apiKey = aiKey.value.trim();
         save();
+      });
+    }
+
+    const pasteAiKey = document.getElementById("paste-ai-key");
+    if (pasteAiKey) {
+      pasteAiKey.addEventListener("click", async () => {
+        const input = document.getElementById("ai-key");
+        try {
+          const text = await navigator.clipboard.readText();
+          if (!text || !text.trim()) {
+            alert("Буфер пустой. На OpenRouter нажми Copy у ключа, потом снова «Вставить».");
+            return;
+          }
+          if (input) input.value = text.trim();
+          state.ai.apiKey = text.trim();
+          state.ai.provider = "openrouter";
+          save();
+          render();
+        } catch (_) {
+          alert("Телефон не дал доступ к буферу. Вставь ключ вручную в поле (удерживай → Вставить) и жми «Сохранить».");
+          if (input) input.focus();
+        }
       });
     }
 
