@@ -1,37 +1,40 @@
 window.BossChat = {
   MIN_PRICE: 500,
-  timeoutMs: 45000,
+  timeoutMs: 35000,
 
-  // Проверенные бесплатные маршруты без API-ключей (Pollinations)
   FREE_MODELS: [
     {
       id: "auto",
       label: "Авто · перебор бесплатных",
-      routes: ["fast", "openai", "oss", "legacy"],
+      routes: ["openaiCompat", "fast", "openai", "oss", "legacy", "get"],
     },
     {
       id: "fast",
       label: "GPT-OSS · быстро",
-      routes: ["fast", "legacy"],
+      routes: ["fast", "openaiCompat", "get", "legacy"],
     },
     {
       id: "openai",
       label: "OpenAI-proxy · бесплатно",
-      routes: ["openai", "legacy"],
+      routes: ["openaiCompat", "openai", "legacy", "get"],
     },
     {
       id: "oss",
       label: "GPT-OSS 20B",
-      routes: ["oss", "fast"],
+      routes: ["oss", "fast", "get"],
     },
     {
       id: "legacy",
       label: "Классика · запасной канал",
-      routes: ["legacy", "fast"],
+      routes: ["legacy", "get", "openaiCompat"],
     },
   ],
 
   ROUTES: {
+    openaiCompat: {
+      url: "https://text.pollinations.ai/openai",
+      model: "openai-fast",
+    },
     fast: {
       url: "https://text.pollinations.ai/v1/chat/completions",
       model: "openai-fast",
@@ -48,6 +51,11 @@ window.BossChat = {
       url: "https://text.pollinations.ai/",
       model: "openai",
       legacy: true,
+    },
+    get: {
+      url: "https://text.pollinations.ai/",
+      model: "openai-fast",
+      get: true,
     },
   },
 
@@ -79,7 +87,7 @@ window.BossChat = {
   },
 
   async ask(message, projectId, state) {
-    const history = Store.getChat(state, projectId).slice(-6);
+    const history = Store.getChat(state, projectId).slice(-4);
     const userMsg = this.enrichUserMessage(message);
     const raw = await this.callFree(userMsg, projectId, state, history);
     const parsed = this.parseModelJson(raw);
@@ -96,16 +104,16 @@ window.BossChat = {
 
   enrichUserMessage(message) {
     if (!this.isPriceAdviceQuestion(message)) return message;
-    return String(message).trim() + "\n[Цены в контексте — факт. Предложи другие цифры. patches=[].]";
+    return String(message).trim() + "\n[Цены в контексте — факт. Предложи другие цифры.]";
   },
 
   buildSystemPrompt(projectId, state, slim) {
     const ctx = slim || this.slimContext(projectId, state);
     return (
-      "Ты бизнес-советник BigBossYan для Яна. По-русски, коротко, с анализом и советом. " +
-      "Контекст: " +
+      "Ты бизнес-советник BigBossYan для Яна. Отвечай по-русски коротко: анализ + совет. " +
+      "Контекст проекта: " +
       JSON.stringify(ctx) +
-      ' Ответ строго JSON: {"reply":"текст","patches":[]}. patches=[] если не просят менять план/цену.'
+      " Ответь обычным текстом. Не выдумывай факты вне контекста."
     );
   },
 
@@ -116,7 +124,7 @@ window.BossChat = {
         name: ctx.name,
         stage: ctx.stage,
         pct: ctx.progressPct,
-        pricing: (ctx.pricing || []).slice(0, 3),
+        pricing: (ctx.pricing || []).slice(0, 2).map((r) => r.name + ": " + r.price),
         next: (ctx.nextTasks || []).slice(0, 2).map((t) => t.title),
       };
     }
@@ -124,10 +132,9 @@ window.BossChat = {
       name: ctx.name,
       stage: ctx.stage,
       progressPct: ctx.progressPct,
-      pricing: ctx.pricing,
+      pricing: (ctx.pricing || []).slice(0, 4),
       nextTasks: (ctx.nextTasks || []).slice(0, 3).map((t) => t.title),
       recs: (ctx.recommendations || []).slice(0, 2).map((r) => r.title),
-      ip: ctx.ipRights ? String(ctx.ipRights.summary || "").slice(0, 220) : null,
     };
   },
 
@@ -135,14 +142,14 @@ window.BossChat = {
     const messages = [
       { role: "system", content: this.buildSystemPrompt(projectId, state, this.slimContext(projectId, state, tiny)) },
     ];
-    for (const m of (history || []).slice(tiny ? -2 : -4)) {
+    for (const m of (history || []).slice(tiny ? -1 : -2)) {
       if (!m || !m.text) continue;
       if (m.role === "assistant" && /^Не получилось/i.test(String(m.text || ""))) continue;
-      if (m.role === "user") messages.push({ role: "user", content: String(m.text).slice(0, tiny ? 400 : 700) });
+      if (m.role === "user") messages.push({ role: "user", content: String(m.text).slice(0, tiny ? 280 : 500) });
       else if (m.role === "assistant")
-        messages.push({ role: "assistant", content: String(m.text).slice(0, tiny ? 500 : 900) });
+        messages.push({ role: "assistant", content: String(m.text).slice(0, tiny ? 320 : 600) });
     }
-    messages.push({ role: "user", content: String(message).slice(0, tiny ? 500 : 900) });
+    messages.push({ role: "user", content: String(message).slice(0, tiny ? 400 : 700) });
     return messages;
   },
 
@@ -164,11 +171,11 @@ window.BossChat = {
 
   async callFree(message, projectId, state, history) {
     const sel = this.selected(state);
-    const routeIds = sel.routes || ["fast", "openai", "legacy"];
+    const routeIds = sel.routes || ["openaiCompat", "fast", "legacy", "get"];
     let lastErr = null;
 
-    // полный контекст → урезанный при 402
-    for (const tiny of [false, true]) {
+    // сначала короткий контекст (меньше 402), потом полный
+    for (const tiny of [true, false]) {
       const messages = this.buildMessages(message, projectId, state, history, tiny);
       for (const rid of routeIds) {
         const route = this.ROUTES[rid];
@@ -181,10 +188,6 @@ window.BossChat = {
           }
         } catch (e) {
           lastErr = e;
-          const msg = String((e && e.message) || e || "");
-          if (/402|quota|Payment|UNAUTHORIZED|401/i.test(msg)) continue;
-          if (/404|model/i.test(msg)) continue;
-          continue;
         }
       }
     }
@@ -195,10 +198,48 @@ window.BossChat = {
     );
   },
 
+  flattenPrompt(messages) {
+    return (messages || [])
+      .map((m) => (m.role === "system" ? "Система: " : m.role === "assistant" ? "Ассистент: " : "Ян: ") + m.content)
+      .join("\n")
+      .slice(0, 1400);
+  },
+
   async fetchRoute(route, messages) {
-    const bodyObj = route.legacy
-      ? { model: route.model, messages, temperature: 0.55 }
-      : { model: route.model, messages, temperature: 0.55 };
+    if (route.get) {
+      const prompt = this.flattenPrompt(messages);
+      const url =
+        "https://text.pollinations.ai/" +
+        encodeURIComponent(prompt) +
+        "?model=" +
+        encodeURIComponent(route.model || "openai-fast") +
+        "&seed=" +
+        Math.floor(Math.random() * 100000);
+      let res;
+      try {
+        res = await fetch(url, {
+          method: "GET",
+          headers: { Accept: "text/plain, application/json, */*" },
+          cache: "no-store",
+          mode: "cors",
+          credentials: "omit",
+        });
+      } catch (e) {
+        throw new Error("Сеть: не удалось связаться с бесплатной нейросетью");
+      }
+      const raw = await res.text();
+      if (res.status === 402) throw new Error("402");
+      if (res.status === 401) throw new Error("401");
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      if (!raw || !String(raw).trim()) throw new Error("Пустой ответ");
+      return raw;
+    }
+
+    const bodyObj = {
+      model: route.model,
+      messages,
+      temperature: 0.55,
+    };
 
     let res;
     try {
@@ -210,6 +251,8 @@ window.BossChat = {
         },
         body: JSON.stringify(bodyObj),
         cache: "no-store",
+        mode: "cors",
+        credentials: "omit",
       });
     } catch (e) {
       throw new Error("Сеть: не удалось связаться с бесплатной нейросетью");
@@ -219,7 +262,6 @@ window.BossChat = {
     if (res.status === 402) throw new Error("402");
     if (res.status === 401) throw new Error("401");
     if (!res.ok) throw new Error("HTTP " + res.status);
-
     if (!raw || !String(raw).trim()) throw new Error("Пустой ответ");
 
     try {
@@ -242,8 +284,8 @@ window.BossChat = {
       return "Этот бесплатный маршрут сейчас закрыт. Переключи модель (Авто / GPT-OSS).";
     }
     if (/Таймаут/i.test(msg)) return msg + ". Повтори — бесплатные модели иногда тормозят.";
-    if (/Сеть|Load failed|Failed to fetch|NetworkError/i.test(msg)) {
-      return "Сеть оборвалась. Проверь интернет и повтори.";
+    if (/Сеть|Load failed|Failed to fetch|NetworkError|связаться/i.test(msg)) {
+      return "Связь с бесплатной нейросетью оборвалась. Проверь интернет/VPN, подожди минуту и нажми снова. Режим «Авто» перебирает запасные каналы.";
     }
     return msg.slice(0, 280);
   },

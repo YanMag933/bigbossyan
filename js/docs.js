@@ -33,6 +33,9 @@ window.BossDocs = {
       `BigBossYan · ${p.name}`,
       date,
       `Прогресс плана основателя: ${prog.pct}% (${prog.done}/${prog.total} задач)`,
+      "",
+      "0. Глоссарий",
+      ...(window.BossGlossary ? window.BossGlossary.linesForDoc(projectId) : []),
     ];
 
     if (audienceId === "investor") {

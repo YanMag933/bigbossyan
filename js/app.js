@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const VER = "30";
+  const VER = "31";
   let state = Store.load();
   BossDocs.syncAll(state);
   Store.save(state);
@@ -34,6 +34,8 @@
 
   function setTab(tab) {
     state.tab = tab;
+    if (!state.ui) state.ui = {};
+    if (tab !== "analytics") state.ui.analyticsDetail = null;
     save();
     render();
   }
@@ -44,6 +46,7 @@
     if (!state.ui) state.ui = { notesMode: "closed", editingNoteId: null };
     state.ui.notesMode = "closed";
     state.ui.editingNoteId = null;
+    state.ui.analyticsDetail = null;
     save();
     render();
   }
@@ -348,23 +351,35 @@
   function renderAnalytics() {
     const p = project();
     const a = p.analytics;
+    const detail = state.ui && state.ui.analyticsDetail;
+    if (detail) return renderAnalyticsDetail(p, a, detail);
+
+    const openBtn = (section, index, label) =>
+      `<button type="button" class="metric metric-btn" data-analytics-open="${esc(section)}" data-analytics-index="${index}">
+        ${label}
+        <span class="metric-more">Открыть →</span>
+      </button>`;
+
     return `
       ${projectSwitchHtml()}
       <div class="hero-block">
         <h2 style="font-size:clamp(24px,7vw,32px)">Аналитика</h2>
         <p>${esc(p.oneLiner)}</p>
+        <p class="small muted" style="margin:10px 0 0;line-height:1.45">Жми на блок — развёрнутый отчёт. Там золотые слова из глоссария Word открывают определение.</p>
       </div>
 
       <div class="section-title">Рынок и позиция</div>
       <div class="metric-grid">
         ${a.market
           .map(
-            (m) => `
-          <div class="metric">
-            <div class="label">${esc(m.label)}</div>
-            <div class="value">${esc(m.value)}</div>
-            ${m.note ? `<div class="note">${esc(m.note)}</div>` : ""}
-          </div>`
+            (m, i) =>
+              openBtn(
+                "market",
+                i,
+                `<div class="label">${esc(m.label)}</div>
+                 <div class="value">${esc(m.value)}</div>
+                 ${m.note ? `<div class="note">${esc(m.note)}</div>` : ""}`
+              )
           )
           .join("")}
       </div>
@@ -374,22 +389,24 @@
         <div class="metric-grid" style="margin-bottom:8px">
           ${a.unit
             .map(
-              (m) => `
-            <div class="metric">
-              <div class="label">${esc(m.label)}</div>
-              <div class="value" style="font-size:15px">${esc(m.value)}</div>
-              ${m.note ? `<div class="note">${esc(m.note)}</div>` : ""}
-            </div>`
+              (m, i) =>
+                openBtn(
+                  "unit",
+                  i,
+                  `<div class="label">${esc(m.label)}</div>
+                   <div class="value" style="font-size:15px">${esc(m.value)}</div>
+                   ${m.note ? `<div class="note">${esc(m.note)}</div>` : ""}`
+                )
             )
             .join("")}
         </div>
         ${a.pricing
           .map(
-            (pr) => `
-          <div class="price-row">
+            (pr, i) => `
+          <button type="button" class="price-row price-btn" data-analytics-open="pricing" data-analytics-index="${i}">
             <span>${esc(pr.name)}<div class="tiny muted" style="margin-top:2px;text-transform:none;letter-spacing:0">${esc(pr.forWhom)}</div></span>
             <strong>${esc(pr.price)}</strong>
-          </div>`
+          </button>`
           )
           .join("")}
       </div>
@@ -398,13 +415,14 @@
       <div class="stack">
         ${a.scenarios
           .map(
-            (s) => `
-          <div class="scenario">
+            (s, i) => `
+          <button type="button" class="scenario scenario-btn" data-analytics-open="scenario" data-analytics-index="${i}">
             <h4>${esc(s.name)}</h4>
             <p><strong style="color:var(--text)">Капитал:</strong> ${esc(s.capital)}</p>
             <p><strong style="color:var(--text)">Ориентир:</strong> ${esc(s.year1)}</p>
             <p>${esc(s.focus)}</p>
-          </div>`
+            <span class="metric-more">Развернуть →</span>
+          </button>`
           )
           .join("")}
       </div>
@@ -415,10 +433,10 @@
           .map((f, i) => {
             const width = 100 - i * 12;
             return `
-            <div class="funnel-row">
+            <button type="button" class="funnel-row funnel-btn" data-analytics-open="funnel" data-analytics-index="${i}">
               <div class="funnel-bar" style="width:${width}%">${esc(f.step)}</div>
               <span class="muted small">${esc(f.n)}</span>
-            </div>`;
+            </button>`;
           })
           .join("")}
       </div>
@@ -427,34 +445,263 @@
       <div class="stack">
         ${a.personas
           .map(
-            (pe) => `
-          <div class="panel">
+            (pe, i) => `
+          <button type="button" class="panel persona-btn" data-analytics-open="persona" data-analytics-index="${i}">
             <div class="tag gold">${esc(pe.name)}</div>
-            <p class="small muted" style="margin:10px 0 0;line-height:1.45">${esc(pe.text)}</p>
-          </div>`
+            <p class="small muted" style="margin:10px 0 0;line-height:1.45;text-align:left">${esc(pe.text)}</p>
+            <span class="metric-more">Подробнее →</span>
+          </button>`
           )
           .join("")}
       </div>
 
       <div class="section-title">SWOT</div>
       <div class="panel swot-grid">
-        <div class="swot-block"><h4>Сильные</h4><ul>${p.swot.strengths.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>
-        <div class="swot-block"><h4>Слабые</h4><ul>${p.swot.weaknesses.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>
-        <div class="swot-block"><h4>Возможности</h4><ul>${p.swot.opportunities.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>
-        <div class="swot-block"><h4>Угрозы</h4><ul>${p.swot.threats.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>
+        ${[
+          ["strengths", "Сильные"],
+          ["weaknesses", "Слабые"],
+          ["opportunities", "Возможности"],
+          ["threats", "Угрозы"],
+        ]
+          .map(
+            ([key, title], i) => `
+          <button type="button" class="swot-block swot-btn" data-analytics-open="swot" data-analytics-index="${i}" data-swot-key="${key}">
+            <h4>${esc(title)}</h4>
+            <ul>${(p.swot[key] || []).slice(0, 2).map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
+            <span class="metric-more">Все пункты →</span>
+          </button>`
+          )
+          .join("")}
       </div>
 
       <div class="section-title">Советы</div>
       <div class="stack">
         ${p.recommendations
           .map(
-            (r) => `
-          <div class="panel reco ${esc(r.priority)}">
+            (r, i) => `
+          <button type="button" class="panel reco ${esc(r.priority)} reco-btn" data-analytics-open="rec" data-analytics-index="${i}">
             <div class="row between wrap">
               <h4>${esc(r.title)}</h4>
               <span class="tag ${r.priority === "high" ? "gold" : ""}">${esc(r.priority)}</span>
             </div>
             <p>${esc(r.body)}</p>
+            <span class="metric-more">Разбор →</span>
+          </button>`
+          )
+          .join("")}
+      </div>
+    `;
+  }
+
+  function gMark(text) {
+    const pid = state.activeProject;
+    if (window.BossGlossary && typeof window.BossGlossary.mark === "function") {
+      return window.BossGlossary.mark(esc(text), pid);
+    }
+    return esc(text);
+  }
+
+  function showGlossPopup(term) {
+    const found = window.BossGlossary && window.BossGlossary.find(term, state.activeProject);
+    const title = (found && found.term) || term || "Термин";
+    const body =
+      (found && found.def) ||
+      "Определения нет в глоссарии этого проекта. Термин попал в текст без карточки — добавим при следующем обновлении.";
+    const old = document.getElementById("gloss-overlay");
+    if (old) old.remove();
+    const overlay = document.createElement("div");
+    overlay.id = "gloss-overlay";
+    overlay.className = "gloss-overlay";
+    overlay.innerHTML = `
+      <div class="gloss-card" role="dialog" aria-modal="true">
+        <div class="gloss-term-title">${esc(title)}</div>
+        <p class="gloss-def">${esc(body)}</p>
+        <button type="button" class="btn block" id="gloss-close">Понятно</button>
+      </div>`;
+    document.body.appendChild(overlay);
+    const close = () => overlay.remove();
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) close();
+    });
+    const closeBtn = document.getElementById("gloss-close");
+    if (closeBtn) closeBtn.addEventListener("click", close);
+  }
+
+  function analyticsDetailBody(p, a, detail) {
+    const section = detail.section;
+    const i = Number(detail.index) || 0;
+    const pid = p.id;
+
+    if (section === "market") {
+      const m = a.market[i];
+      if (!m) return null;
+      return {
+        title: m.label,
+        blocks: [
+          { h: "Цифра", t: m.value },
+          m.note ? { h: "Комментарий", t: m.note } : null,
+          {
+            h: "Что это значит для «" + p.name + "»",
+            t:
+              "Это ориентир рынка/позиции, а не обещание выручки. Сверяй с SOM и своими ближайшими шагами плана: сначала доказуемые оплаты/пилоты, потом масштаб.",
+          },
+          {
+            h: "Связка с юнитом",
+            t: (a.unit || []).map((u) => u.label + ": " + u.value).join(" · ") || "—",
+          },
+        ].filter(Boolean),
+      };
+    }
+    if (section === "unit") {
+      const m = a.unit[i];
+      if (!m) return null;
+      return {
+        title: m.label,
+        blocks: [
+          { h: "Значение", t: m.value },
+          m.note ? { h: "Пояснение", t: m.note } : null,
+          {
+            h: "Зачем считать",
+            t: "Юнит показывает, жива ли сделка после комиссий, налогов и прямого времени. Если маржа тонкая — дорогой CAC и сторы убьют модель.",
+          },
+          {
+            h: "Прайс рядом",
+            t: (a.pricing || []).map((pr) => pr.name + " " + pr.price).join(" · "),
+          },
+        ].filter(Boolean),
+      };
+    }
+    if (section === "pricing") {
+      const pr = a.pricing[i];
+      if (!pr) return null;
+      return {
+        title: "Пакет · " + pr.name,
+        blocks: [
+          { h: "Цена", t: pr.price },
+          { h: "Для кого", t: pr.forWhom || "—" },
+          {
+            h: "Как читать",
+            t: "Цена должна бить в портрет и в альтернативу клиента (коуч / текучка / Excel). Не сравнивай только с бесплатными трекерами.",
+          },
+          {
+            h: "Сценарии капитала",
+            t: (a.scenarios || []).map((s) => s.name + ": " + s.capital).join(" · "),
+          },
+        ],
+      };
+    }
+    if (section === "scenario") {
+      const s = a.scenarios[i];
+      if (!s) return null;
+      return {
+        title: "Сценарий · " + s.name,
+        blocks: [
+          { h: "Капитал", t: s.capital },
+          { h: "Ориентир года 1", t: s.year1 },
+          { h: "Фокус", t: s.focus },
+          {
+            h: "Правило выбора",
+            t: "Не прыгай в Seed/стор, пока Bootstrap не дал сигнал (оплаты или платящие пилоты). Сценарий — развилка ресурсов, не прогноз Excel.",
+          },
+        ],
+      };
+    }
+    if (section === "funnel") {
+      const f = a.funnel[i];
+      if (!f) return null;
+      const prev = a.funnel[i - 1];
+      const next = a.funnel[i + 1];
+      return {
+        title: "Этап воронки · " + f.step,
+        blocks: [
+          { h: "Цель / объём", t: String(f.n) },
+          prev ? { h: "Предыдущий шаг", t: prev.step + " → " + prev.n } : null,
+          next ? { h: "Следующий шаг", t: next.step + " → " + next.n } : null,
+          {
+            h: "Как использовать",
+            t: "Смотри, где отвал максимальный. Узкое место чини оффером, скоростью ответа или критерием пилота — не «ещё контента ради контента».",
+          },
+        ].filter(Boolean),
+      };
+    }
+    if (section === "persona") {
+      const pe = a.personas[i];
+      if (!pe) return null;
+      return {
+        title: pe.name,
+        blocks: [
+          { h: "Портрет", t: pe.text },
+          {
+            h: "Что продавать",
+            t: "Говори языком боли портрета. Пакет и канал должны совпадать: иначе трафик будет, а оплаты — нет.",
+          },
+          {
+            h: "Связь с прайсом",
+            t: (a.pricing || []).map((pr) => pr.name + " — " + (pr.forWhom || pr.price)).join("\n"),
+          },
+        ],
+      };
+    }
+    if (section === "swot") {
+      const keys = ["strengths", "weaknesses", "opportunities", "threats"];
+      const titles = { strengths: "Сильные", weaknesses: "Слабые", opportunities: "Возможности", threats: "Угрозы" };
+      const key = detail.swotKey || keys[i];
+      const list = (p.swot && p.swot[key]) || [];
+      return {
+        title: "SWOT · " + (titles[key] || key),
+        blocks: [
+          { h: "Все пункты", t: list.map((x, n) => n + 1 + ". " + x).join("\n") },
+          {
+            h: "Как читать",
+            t:
+              key === "threats" || key === "weaknesses"
+                ? "Это не «минусы для стыда», а список работ: что закрыть договором, продуктом или фокусом недели."
+                : "Сильные стороны и возможности — топливо оффера и кейса. Усиливай их в документе для инвестора/команды.",
+          },
+        ],
+      };
+    }
+    if (section === "rec") {
+      const r = p.recommendations[i];
+      if (!r) return null;
+      return {
+        title: r.title,
+        blocks: [
+          { h: "Приоритет", t: String(r.priority || "—") },
+          { h: "Суть", t: r.body },
+          {
+            h: "Как применить",
+            t: "Перенеси в ближайшие задачи плана или в чат проекта: «отметь задачу …» / уточни формулировку в Word для нужной аудитории.",
+          },
+        ],
+      };
+    }
+    return null;
+  }
+
+  function renderAnalyticsDetail(p, a, detail) {
+    const body = analyticsDetailBody(p, a, detail);
+    if (!body) {
+      return `
+        ${projectSwitchHtml()}
+        <div class="panel">
+          <p>Не нашёл блок. <button type="button" class="linkish" data-analytics-back>Назад к аналитике</button></p>
+        </div>`;
+    }
+    return `
+      ${projectSwitchHtml()}
+      <div class="hero-block">
+        <button type="button" class="btn secondary" data-analytics-back style="margin-bottom:12px">← К аналитике</button>
+        <h2 style="font-size:clamp(22px,6.5vw,30px)">${gMark(body.title)}</h2>
+        <p class="small muted" style="margin:8px 0 0;line-height:1.45">Золотые термины из глоссария Word — нажми, чтобы увидеть определение.</p>
+      </div>
+      <div class="stack">
+        ${body.blocks
+          .map(
+            (b) => `
+          <div class="panel analytics-detail-block">
+            <div class="tiny muted" style="margin-bottom:8px">${esc(b.h)}</div>
+            <div class="detail-prose">${gMark(b.t).replace(/\n/g, "<br>")}</div>
           </div>`
           )
           .join("")}
@@ -530,7 +777,8 @@
                  </select>
                </label>
                <p class="tiny muted" style="margin:8px 0 0;line-height:1.4;text-transform:none;letter-spacing:0">Ключи не нужны. Если «лимит» — подожди минуту или выбери другую модель. «Авто» сам перебирает маршруты.</p>`
-            : `<p class="small muted" style="margin:0;line-height:1.45">Отвечает коротко по теме запроса. Правки — только после «да» / кнопки.</p>`
+            : `<p class="small muted" style="margin:0;line-height:1.45">Поиск и правки по плану. Ответ — только по делу, без свалки Word и прогресса. Правки — после «да».</p>`
+
         }
       </div>
 
@@ -852,6 +1100,35 @@
     });
     app.querySelectorAll("[data-del-win]").forEach((btn) => {
       btn.addEventListener("click", () => removeWin(btn.dataset.delWin));
+    });
+
+    app.querySelectorAll("[data-analytics-open]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (!state.ui) state.ui = {};
+        state.ui.analyticsDetail = {
+          section: btn.dataset.analyticsOpen,
+          index: Number(btn.dataset.analyticsIndex) || 0,
+          swotKey: btn.dataset.swotKey || null,
+        };
+        save();
+        render();
+        window.scrollTo(0, 0);
+      });
+    });
+    app.querySelectorAll("[data-analytics-back]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (!state.ui) state.ui = {};
+        state.ui.analyticsDetail = null;
+        save();
+        render();
+      });
+    });
+    app.querySelectorAll("[data-gloss]").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        showGlossPopup(btn.dataset.gloss);
+      });
     });
 
     const form = document.getElementById("win-form");

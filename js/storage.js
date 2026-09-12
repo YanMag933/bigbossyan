@@ -171,7 +171,7 @@ window.Store = {
         keyStatus: "",
         showKeyEditor: false,
       },
-      ui: { notesMode: "closed", editingNoteId: null, chatMode: "ai", docPreview: null },
+      ui: { notesMode: "closed", editingNoteId: null, chatMode: "ai", docPreview: null, analyticsDetail: null },
       docs: { audience: "investor", lastFile: null },
     };
   },

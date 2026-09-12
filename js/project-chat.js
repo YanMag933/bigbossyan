@@ -164,19 +164,21 @@ window.BossProjectChat = {
       .slice(0, 40)
       .forEach((n) => push("note", `Заметка · ${n.title}`, n.body, { noteId: n.id }));
 
+    // Документы индексируем целиком, без нарезки строк и без шапки с датой/прогрессом
     window.Store.docsList(state, projectId).forEach((d) => {
-      const aud = d.audience || "doc";
-      const audTitle =
-        (window.BossDocs && window.BossDocs.audiences[aud] && window.BossDocs.audiences[aud].title) || aud;
-      push("doc", `Документ · ${d.title}`, d.text, { docId: d.id, audience: aud });
-      String(d.text || "")
+      const clean = String(d.text || "")
         .split(/\n+/)
         .map((line) => line.trim())
-        .filter((line) => line.length > 24)
-        .slice(0, 40)
-        .forEach((line, i) => {
-          push("doc", `Документ (${audTitle}) · фрагмент ${i + 1}`, line, { docId: d.id, audience: aud });
-        });
+        .filter(
+          (line) =>
+            line &&
+            !/^BigBossYan/i.test(line) &&
+            !/^\d{1,2}\s+\S+\s+\d{4}/i.test(line) &&
+            !/Прогресс плана/i.test(line) &&
+            !/План основателя выполнен/i.test(line)
+        )
+        .join("\n");
+      push("doc", `Документ · ${d.title}`, clean.slice(0, 1200), { docId: d.id, audience: d.audience || "doc" });
     });
 
     if (p.ipRights) {
@@ -197,7 +199,7 @@ window.BossProjectChat = {
     if (/цен|прайс|тариф|пакет|сколько\s+стоит/.test(t)) return "pricing";
     if (/юнит|марж/.test(t)) return "unit";
     if (/прогресс|процент|сколько\s+сделан/.test(t)) return "progress";
-    if (/задач|следующ|что\s+делать|план\b/.test(t)) return "task";
+    if (/задач|следующ|что\s+делать|открыт\w*\s+шаг/.test(t)) return "task";
     if (/заметк/.test(t)) return "note";
     if (/побед/.test(t)) return "win";
     if (/воронк/.test(t)) return "funnel";
@@ -215,19 +217,31 @@ window.BossProjectChat = {
   topicBoost(text, item) {
     const topic = this.detectTopic(text);
     let b = 0;
-    if (topic && item.topic === topic) b += 20;
+    if (topic && item.topic === topic) b += 24;
     if (topic === "doc" && item.topic === "doc") {
       const t = text.toLowerCase();
       if (/инвестор/.test(t) && /инвестор/i.test(item.title + item.body)) b += 8;
       if (/команд/.test(t) && /команд/i.test(item.title + item.body)) b += 8;
       if (/покупател|кп\b/.test(t) && /(покупател|кп|коммерческ)/i.test(item.title + item.body)) b += 8;
     }
-    // чужие темы — штраф, чтобы не засорять ответ
-    if (topic && item.topic !== topic && !(topic === "ip" && item.topic === "doc")) b -= 6;
-    if (!topic || topic !== "doc") {
-      if (item.topic === "doc" && /фрагмент/i.test(item.title)) b -= 10;
-    }
+    if (topic && item.topic !== topic) b -= 14;
+    // Документы и прогресс не лезут в обычный поиск
+    if (item.topic === "doc" && topic !== "doc") b -= 30;
+    if (item.topic === "progress" && topic !== "progress") b -= 40;
+    if (item.topic === "project" && topic && topic !== "project") b -= 8;
     return b;
+  },
+
+  isBareTaskQuery(text) {
+    const t = String(text || "")
+      .toLowerCase()
+      .replace(/ё/g, "е")
+      .trim();
+    return /^(задачи|задача|следующие|следующее|что делать|открытые задачи|план задач)[?.!]*$/i.test(t);
+  },
+
+  formatTaskHit(item) {
+    return `• ${item.title}\n  ${this.short(item.body, 160)}`;
   },
 
   search(text, projectId, state) {
@@ -236,7 +250,6 @@ window.BossProjectChat = {
     const p = window.ProjectLive.get(projectId, state);
     const items = this.index(projectId, state);
 
-    // Цельные ответы по явной теме — без свалки фрагментов
     if (topic === "pricing") {
       const rows = (p.analytics && p.analytics.pricing) || [];
       return {
@@ -278,10 +291,34 @@ window.BossProjectChat = {
       };
     }
     if (topic === "task") {
-      const next = window.Store.nextTasks(projectId, state, 5);
+      if (this.isBareTaskQuery(text)) {
+        const next = window.Store.nextTasks(projectId, state, 5);
+        return {
+          reply: next.length
+            ? ["Следующие задачи:", ...next.map((t) => `• ${t.title}\n  Открыта · фаза: ${t.phaseTitle} · вес ${t.weight || 1}`)].join(
+                "\n"
+              )
+            : "Открытых задач нет.",
+          patches: null,
+        };
+      }
+      const taskHits = items
+        .filter((it) => it.topic === "task")
+        .map((item) => ({ item, score: this.score(item.title + " " + item.body, toks) }))
+        .filter((x) => x.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 3);
+      if (taskHits.length) {
+        return {
+          reply: taskHits.map((x) => this.formatTaskHit(x.item)).join("\n"),
+          patches: null,
+        };
+      }
+      const next = window.Store.nextTasks(projectId, state, 3);
       return {
         reply: next.length
-          ? ["Следующие задачи:", ...next.map((t) => `• ${t.title} (${t.phaseTitle})`)].join("\n")
+          ? "Точного совпадения нет. Ближайшие открытые:\n" +
+            next.map((t) => `• Задача · ${t.title}\n  Открыта · фаза: ${t.phaseTitle} · вес ${t.weight || 1}`).join("\n")
           : "Открытых задач нет.",
         patches: null,
       };
@@ -294,7 +331,13 @@ window.BossProjectChat = {
       };
     }
 
-    let scored = items
+    // Обычный поиск: без документов/прогресса, пока явно не спросили
+    const pool =
+      topic === "doc"
+        ? items
+        : items.filter((it) => it.topic !== "doc" && it.topic !== "progress");
+
+    let scored = pool
       .map((item) => ({
         item,
         score: this.score(item.title + " " + item.body, toks) + this.topicBoost(text, item),
@@ -310,39 +353,49 @@ window.BossProjectChat = {
     if (!scored.length) {
       return {
         reply:
-          "Ничего точного не нашёл. Уточни: «цены», «прогресс», «патент», «следующие задачи», «документ инвестор».",
+          "Ничего точного не нашёл. Примеры: «оферта», «цены», «прогресс», «патент», «следующие задачи», «документ инвестор».",
         patches: null,
       };
     }
 
+    // Одна тема — как у лучшего попадания (без свалки Word + задач)
+    const leadTopic = scored[0].item.topic;
+    scored = scored.filter((x) => x.item.topic === leadTopic);
+
     const best = scored[0].score;
-    const cutoff = Math.max(best * 0.55, best - 12);
+    const cutoff = Math.max(best * 0.72, best - 6);
     const seen = new Set();
     const top = [];
     for (const x of scored) {
       if (x.score < cutoff) continue;
-      // один фрагмент на документ, не пачка
-      const key =
-        x.item.topic === "doc"
-          ? "doc:" + (x.item.docId || x.item.audience || x.item.title)
-          : x.item.topic + "|" + this.short(x.item.body, 60);
+      const key = x.item.topic + "|" + this.short(x.item.title + " " + x.item.body, 80);
       if (seen.has(key)) continue;
       seen.add(key);
       top.push(x);
-      if (top.length >= (topic === "doc" ? 2 : 3)) break;
+      if (top.length >= (leadTopic === "task" ? 3 : leadTopic === "doc" ? 1 : 2)) break;
+    }
+
+    if (leadTopic === "task") {
+      return { reply: top.map((x) => this.formatTaskHit(x.item)).join("\n"), patches: null };
     }
 
     if (top.length === 1) {
       const it = top[0].item;
+      if (it.topic === "doc") {
+        return {
+          reply: `${it.title}\n${this.short(it.body, 280)}`,
+          patches: null,
+        };
+      }
       return {
-        reply: `${it.title}\n${this.short(it.body, 420)}`,
+        reply: `${it.title}\n${this.short(it.body, 320)}`,
         patches: null,
       };
     }
 
-    const lines = top.map((x) => `• ${x.item.title.replace(/\s·\sфрагмент\s+\d+/i, "")}\n  ${this.short(x.item.body, 180)}`);
+    const lines = top.map((x) => `• ${x.item.title}\n  ${this.short(x.item.body, 140)}`);
     return {
-      reply: lines.join("\n\n"),
+      reply: lines.join("\n"),
       patches: null,
     };
   },
