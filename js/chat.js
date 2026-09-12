@@ -1,64 +1,80 @@
 window.BossChat = {
   MIN_PRICE: 500,
 
-  OPENROUTER: {
-    endpoint: "https://openrouter.ai/api/v1/chat/completions",
-    model: "google/gemma-4-31b-it:free",
-    label: "Gemma 4",
-    models: [
-      "google/gemma-4-31b-it:free",
-      "openrouter/free",
-      "nvidia/nemotron-3.5-lightning:free",
-      "thinkingmachines/inkling:free",
-      "deepseek/deepseek-chat-v3-0324",
+  QWEN: {
+    label: "Qwen",
+    models: ["qwen-plus", "qwen-turbo", "qwen-flash", "qwen2.5-72b-instruct", "qwen-max"],
+    endpoints: [
+      "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions",
+      "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
     ],
   },
 
   FREE: {
-    endpoint: "https://text.pollinations.ai/openai",
-    models: ["openai-fast", "openai"],
-    cooldownMs: 16000,
+    label: "Бесплатный",
+    // GET text — стабильнее POST с телефона (меньше 402 / CORS сюрпризов)
+    getBases: ["https://gen.pollinations.ai/text/", "https://text.pollinations.ai/"],
+    postEndpoint: "https://gen.pollinations.ai/v1/chat/completions",
+    models: ["openai", "openai-fast", "mistral"],
+    cooldownMs: 8000,
     lastCallAt: 0,
   },
 
-  provider(state) {
-    const p = String((state && state.ai && state.ai.provider) || "free").toLowerCase();
-    if (p === "gemini" || p === "openrouter") return "openrouter";
-    if (p === "free" || p === "pollinations") return "free";
-    return "free";
+  /** Режим: qwen (ключ DashScope) или free (без ключа). */
+  mode(state) {
+    return this.getQwenKey(state) ? "qwen" : "free";
   },
 
-  getKey(state) {
+  provider(state) {
+    // совместимость со старым кодом (один поток чата)
+    return "main";
+  },
+
+  getQwenKey(state) {
     if (!state || !state.ai) return "";
-    if (this.provider(state) === "free") return "";
-    const key = String(state.ai.apiKey || state.ai.openrouterKey || "").trim();
-    if (!key || /^AIza/i.test(key)) return "";
+    const key = String(state.ai.apiKey || state.ai.qwenKey || "").trim();
+    if (!key) return "";
+    // OpenRouter-ключи сюда не пускаем
+    if (/^sk-or-/i.test(key) || /^AIza/i.test(key)) return "";
+    if (!/^sk-/i.test(key)) return "";
     return key;
   },
 
   hasKey(state) {
-    if (this.provider(state) === "free") return true;
-    const key = this.getKey(state);
-    if (!key) return false;
-    return state.ai && state.ai.keyOk === true && state.ai.keyFp === this.keyFingerprint(key);
+    // чат всегда доступен: без ключа = бесплатный канал
+    return true;
+  },
+
+  modelLabel(state) {
+    if (this.mode(state) === "qwen") {
+      const m = (state.ai && state.ai.qwenModel) || this.QWEN.models[0];
+      return "Qwen · " + m;
+    }
+    return "Бесплатный · без ключа";
   },
 
   async ask(message, projectId, state) {
-    const provider = this.provider(state);
-    if (provider === "openrouter" && !this.getKey(state)) {
-      return {
-        reply:
-          "Нет ключа OpenRouter.\n\n1) openrouter.ai/keys → Create key\n2) Вставь выше → «Сохранить»\n\nИли переключись на «Бесплатный» — там отдельный чат без ключа.",
-        patches: [],
-      };
+    const history = Store.getChat(state, projectId).slice(-10);
+    const userMsg = this.enrichUserMessage(message);
+    let raw;
+    const errors = [];
+
+    if (this.mode(state) === "qwen") {
+      try {
+        raw = await this.callQwen(userMsg, projectId, state, history);
+      } catch (e) {
+        errors.push("Qwen: " + this.friendlyError(e));
+        try {
+          raw = await this.callFree(userMsg, projectId, state, history);
+        } catch (e2) {
+          errors.push("Free: " + this.friendlyError(e2));
+          throw new Error(errors.join("\n"));
+        }
+      }
+    } else {
+      raw = await this.callFree(userMsg, projectId, state, history);
     }
 
-    const history = Store.getChat(state, projectId, provider).slice(-12);
-    const userMsg = this.enrichUserMessage(message);
-    const raw =
-      provider === "free"
-        ? await this.callFree(userMsg, projectId, state, history)
-        : await this.callOpenRouter(userMsg, projectId, state, history);
     const parsed = this.parseModelJson(raw);
     parsed.patches = this.sanitizePatches(parsed.patches || [], projectId, message);
     return parsed;
@@ -75,291 +91,102 @@ window.BossChat = {
     if (!this.isPriceAdviceQuestion(message)) return message;
     return (
       String(message).trim() +
-      "\n\n[Важно: текущие цены в контексте — это факт «как сейчас». Предложи ДРУГИЕ цифры (не копируй текущий прайс как ответ). Для каждого варианта: новая цена / пакет, чем отличается от текущего, плюсы/минусы. Патчи в план не ставь.]"
+      "\n\n[Важно: текущие цены в контексте — факт «как сейчас». Предложи ДРУГИЕ цифры, не копируй текущий прайс. Патчи в план не ставь.]"
     );
   },
 
-  buildSystemPrompt(projectId, state) {
+  buildSystemPrompt(projectId, state, compact) {
     const ctx = window.ProjectLive.contextForAi(projectId, state);
-    const otherId = projectId === "lifeRpg" ? "trailOn" : "lifeRpg";
-    const other = window.ProjectLive.contextForAi(otherId, state);
+    const slim = {
+      projectId: ctx.projectId,
+      name: ctx.name,
+      stage: ctx.stage,
+      progressPct: ctx.progressPct,
+      pricing: ctx.pricing,
+      nextTasks: (ctx.nextTasks || []).slice(0, 4),
+      notes: (ctx.notes || []).slice(0, 4),
+      recommendations: (ctx.recommendations || []).slice(0, 3),
+    };
 
-    return `Ты — умный бизнес-советник внутри приложения BigBossYan для основателя Яна.
-Ты НЕ шаблонный бот. Сначала пойми вопрос, потом ответь по существу.
+    const base = `Ты бизнес-советник BigBossYan для основателя Яна. Отвечай по-русски, по делу.
+Контекст: ${JSON.stringify(slim)}
+Правила:
+- pricing = текущие цены (факт). «N вариантов цены» = N ДРУГИХ сценариев, не копипаст прайса.
+- patches=[] по умолчанию. Патч только если явно: измени/поставь/примени + пакет + цена (≥500₽).
+Ответ строго JSON без markdown: {"reply":"текст","patches":[]}`;
 
-Контекст текущего проекта:
-${JSON.stringify(ctx, null, 2)}
-
-Кратко второй проект (для сравнения, если уместно):
-${JSON.stringify(
-  {
-    projectId: other.projectId,
-    name: other.name,
-    progressPct: other.progressPct,
-    pricing: other.pricing,
-    stage: other.stage,
-  },
-  null,
-  2
-)}
-
-Как думать:
-- Прочитай вопрос буквально. «Предложи 3 варианта цены» = совет и сравнение, НЕ смена цены в плане и НЕ копипаст текущего прайса.
-- Число «3» в таком вопросе — количество альтернативных сценариев, НЕ цена 3 ₽.
-- Поле pricing / пакеты в контексте — это ТЕКУЩИЕ цены (факт). Если просят варианты — предложи ДРУГИЕ цифры: обычно смесь ниже / около / выше текущих, с обоснованием для каждого пакета или линейки.
-- Запрещено отвечать списком текущих цен (например просто повторить 9900 / 19900 / 49000) как «три варианта».
-- Цены пакетов — обычно тысячи рублей (Life RPG ~5–25 тыс., TrailOn подписка ~3–7 тыс./точка).
-- Опирайся на прайс, прогресс, SWOT, заметки и рекомендации. Не выдумывай выручку, которой нет.
-- Отвечай по-русски, спокойно и по делу: сначала вывод, потом конкретика по вариантам.
-- Не раздувай ответ водой.
-
-Правки плана (patches):
-- По умолчанию patches = [].
-- Патч ставь ТОЛЬКО если пользователь ЯВНО просит изменить данные в приложении
-  (слова: измени, поставь, примени, зафиксируй, обнови в плане) И назвал пакет + цену.
-- Если сомневаешься — patches пустой, предложи формулировку для подтверждения.
-- Никогда не ставь цену ниже 500 ₽ для пакетов.
-
-Формат ответа — строго JSON без markdown:
-{"reply":"текст человеку","patches":[]}
-
-Допустимые patches:
-{"op":"setPrice","projectId":"lifeRpg|trailOn","package":"точное имя пакета из прайса","price":"12900 ₽"}
-{"op":"setField","projectId":"...","field":"oneLiner|tagline|position|stage|name|short","value":"..."}
-{"op":"setUnit","projectId":"...","label":"...","value":"...","note":"..."}
-{"op":"addWin","projectId":"...","text":"..."}`;
+    if (compact && base.length > 2200) return base.slice(0, 2200) + "…";
+    return base;
   },
 
-  buildMessages(message, projectId, state, history) {
-    const messages = [{ role: "system", content: this.buildSystemPrompt(projectId, state) }];
-    for (const m of history) {
+  buildMessages(message, projectId, state, history, compact) {
+    const messages = [{ role: "system", content: this.buildSystemPrompt(projectId, state, compact) }];
+    for (const m of (history || []).slice(-6)) {
       if (!m || !m.text) continue;
       if (m.role === "user") messages.push({ role: "user", content: m.text });
       else if (m.role === "assistant") messages.push({ role: "assistant", content: m.text });
     }
-    const last = messages[messages.length - 1];
-    if (!last || last.role !== "user" || last.content !== message) {
-      messages.push({ role: "user", content: message });
-    }
+    messages.push({ role: "user", content: message });
     return messages;
-  },
-
-  modelLabel(state) {
-    if (this.provider(state) === "free") return "Pollinations · openai-fast";
-    return (this.OPENROUTER.label || "Gemma 4") + " · OpenRouter";
-  },
-
-  openRouterModels(state) {
-    const dead = /deepseek.*:free|deepseek-chat-v3-0324:free/i;
-    const preferred =
-      String((state.ai && state.ai.openrouterModel) || this.OPENROUTER.model || "").trim() ||
-      this.OPENROUTER.model;
-    const list = [];
-    if (preferred && !dead.test(preferred)) list.push(preferred);
-    for (const m of this.OPENROUTER.models) {
-      if (!list.includes(m) && !dead.test(m)) list.push(m);
-    }
-    return list.length ? list : [this.OPENROUTER.model];
-  },
-
-  extractAltSlug(errMsg) {
-    const m = String(errMsg || "").match(/use this slug instead:\s*([a-z0-9_.:/-]+)/i);
-    return m ? m[1].trim() : "";
-  },
-
-  async callOpenRouter(message, projectId, state, history) {
-    const key = this.getKey(state);
-    const models = this.openRouterModels(state).slice(0, 5);
-    const messages = this.buildMessages(message, projectId, state, history);
-    const tried = new Set();
-    let lastErr = null;
-
-    for (let i = 0; i < models.length; i++) {
-      const model = models[i];
-      if (!model || tried.has(model)) continue;
-      tried.add(model);
-      try {
-        return await this.requestOpenRouter(key, model, messages);
-      } catch (e) {
-        lastErr = e;
-        const msg = String(e.message || e);
-        const alt = this.extractAltSlug(msg);
-        if (alt && !tried.has(alt)) models.push(alt);
-        // Пробуем следующую модель почти при любой ошибке провайдера
-        continue;
-      }
-    }
-    throw lastErr || new Error("Все модели OpenRouter недоступны сейчас");
   },
 
   async fetchTimeout(url, options, ms) {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), ms || 35000);
+    const timer = setTimeout(() => ctrl.abort(), ms || 40000);
     try {
       return await fetch(url, { ...options, signal: ctrl.signal });
     } catch (e) {
-      if (e && e.name === "AbortError") throw new Error("Таймаут ответа модели (" + Math.round((ms || 35000) / 1000) + "с)");
+      if (e && e.name === "AbortError") {
+        throw new Error("Таймаут ответа модели (" + Math.round((ms || 40000) / 1000) + "с)");
+      }
       throw e;
     } finally {
       clearTimeout(timer);
     }
   },
 
-  async requestOpenRouter(key, model, messages) {
+  async callQwen(message, projectId, state, history) {
+    const key = this.getQwenKey(state);
+    const messages = this.buildMessages(message, projectId, state, history, false);
+    const preferred = String((state.ai && state.ai.qwenModel) || "").trim();
+    const models = [];
+    if (preferred) models.push(preferred);
+    for (const m of this.QWEN.models) if (!models.includes(m)) models.push(m);
+
+    let lastErr = null;
+    for (const endpoint of this.QWEN.endpoints) {
+      for (const model of models.slice(0, 4)) {
+        try {
+          const content = await this.requestChatCompletions(endpoint, key, model, messages);
+          state.ai.qwenModel = model;
+          state.ai.qwenEndpoint = endpoint;
+          return content;
+        } catch (e) {
+          lastErr = e;
+          const msg = String(e.message || e);
+          // неверный ключ — сразу стоп
+          if (/401|Unauthorized|invalid.*key|InvalidApiKey/i.test(msg)) throw e;
+          continue;
+        }
+      }
+    }
+    throw lastErr || new Error("Qwen сейчас недоступен");
+  },
+
+  async requestChatCompletions(endpoint, key, model, messages) {
     const res = await this.fetchTimeout(
-      this.OPENROUTER.endpoint,
+      endpoint,
       {
         method: "POST",
         headers: {
           Authorization: "Bearer " + key,
           "Content-Type": "application/json",
-          "HTTP-Referer": "https://yanmag933.github.io/bigbossyan/",
-          "X-Title": "BigBossYan",
         },
         body: JSON.stringify({
           model,
           messages,
           temperature: 0.55,
           max_tokens: 1400,
-        }),
-      },
-      40000
-    );
-
-    const detail = await res.text();
-    if (!res.ok) {
-      let parsed = detail;
-      try {
-        const j = JSON.parse(detail);
-        if (j.error) {
-          if (typeof j.error === "string") parsed = j.error;
-          else parsed = j.error.message || JSON.stringify(j.error);
-        }
-      } catch (_) {}
-      throw new Error(String(parsed).slice(0, 280));
-    }
-
-    let data;
-    try {
-      data = JSON.parse(detail);
-    } catch (_) {
-      throw new Error("Кривой ответ OpenRouter");
-    }
-    const content =
-      data &&
-      data.choices &&
-      data.choices[0] &&
-      data.choices[0].message &&
-      data.choices[0].message.content;
-    if (!content) throw new Error("Пустой ответ модели");
-    return content;
-  },
-
-  async callFree(message, projectId, state, history) {
-    const wait = this.FREE.cooldownMs - (Date.now() - (this.FREE.lastCallAt || 0));
-    if (wait > 0) {
-      throw new Error(
-        "Подожди " + Math.ceil(wait / 1000) + " сек — у бесплатного канала лимит ~1 запрос / 15 сек."
-      );
-    }
-
-    const messages = this.buildMessages(message, projectId, state, history);
-    if (messages[0] && messages[0].role === "system") {
-      const short = messages[0].content;
-      if (short.length > 2800) messages[0].content = short.slice(0, 2800) + "\n…";
-    }
-    const hist = messages.filter((m) => m.role !== "system").slice(-4);
-    const payloadMessages = [messages[0]].concat(hist);
-
-    let lastErr = null;
-    for (const model of this.FREE.models) {
-      try {
-        const out = await this.requestFree(model, payloadMessages);
-        this.FREE.lastCallAt = Date.now();
-        return out;
-      } catch (e) {
-        lastErr = e;
-        continue;
-      }
-    }
-    throw new Error(this.friendlyError(lastErr || new Error("Бесплатная модель сейчас недоступна.")));
-  },
-
-  friendlyError(err) {
-    const msg = String((err && err.message) || err || "");
-    if (/402|Payment Required|budget|pollen/i.test(msg)) {
-      return "Бесплатный канал временно занят/лимит исчерпан (402). Подожди ~20 сек или переключись на OpenRouter.";
-    }
-    if (/Load failed|Failed to fetch|NetworkError|network/i.test(msg)) {
-      return "Сеть оборвала запрос (Load failed). Проверь интернет / VPN и попробуй ещё раз через несколько секунд.";
-    }
-    if (/Model not found|not found/i.test(msg)) {
-      return "Модель на бесплатном канале сменилась. Обнови через reset и попробуй снова.";
-    }
-    if (/Таймаут/i.test(msg)) {
-      return msg + " Повтори запрос чуть позже.";
-    }
-    if (/подожди|cooldown/i.test(msg)) {
-      return msg;
-    }
-    if (/401|Unauthorized|invalid.*key|User not found/i.test(msg)) {
-      return "Ключ OpenRouter не принят. Создай новый на openrouter.ai/keys и сохрани снова.";
-    }
-    return msg.slice(0, 280);
-  },
-
-  keyFingerprint(key) {
-    const k = String(key || "").trim();
-    if (k.length < 12) return k;
-    return k.slice(0, 8) + "…" + k.slice(-4);
-  },
-
-  /** Быстрая проверка: ключ живой + модель отвечает */
-  async verifyOpenRouterKey(key) {
-    const clean = String(key || "").trim();
-    if (!clean || /^AIza/i.test(clean)) {
-      throw new Error("Нужен ключ OpenRouter вида sk-or-…");
-    }
-
-    const auth = await this.fetchTimeout(
-      "https://openrouter.ai/api/v1/auth/key",
-      {
-        method: "GET",
-        headers: { Authorization: "Bearer " + clean },
-      },
-      15000
-    );
-    const authText = await auth.text();
-    if (!auth.ok) {
-      let parsed = authText;
-      try {
-        const j = JSON.parse(authText);
-        parsed = (j.error && (j.error.message || j.error)) || authText;
-      } catch (_) {}
-      throw new Error(this.friendlyError(parsed));
-    }
-
-    // Мини-пинг модели — чтобы не было сюрприза уже в чате
-    await this.requestOpenRouter(clean, this.OPENROUTER.model, [
-      { role: "user", content: 'Ответь строго JSON: {"reply":"ок","patches":[]}' },
-    ]);
-
-    return { ok: true, fingerprint: this.keyFingerprint(clean) };
-  },
-
-  async requestFree(model, messages) {
-    const res = await this.fetchTimeout(
-      this.FREE.endpoint,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Referer: "https://yanmag933.github.io/bigbossyan/",
-        },
-        body: JSON.stringify({
-          model,
-          messages,
-          temperature: 0.55,
         }),
       },
       45000
@@ -371,35 +198,202 @@ ${JSON.stringify(
       try {
         const j = JSON.parse(detail);
         parsed =
-          (j.error && (j.error.message || j.error)) ||
-          (j.details && j.details.error && j.details.error.message) ||
+          (j.error && (j.error.message || j.error.code || j.error)) ||
+          j.message ||
           detail;
       } catch (_) {}
-      throw new Error(String(parsed).slice(0, 220));
+      throw new Error(String(parsed).slice(0, 280));
     }
 
     let data;
     try {
       data = JSON.parse(detail);
     } catch (_) {
-      if (detail && detail.trim()) return detail.trim();
-      throw new Error("Кривой ответ бесплатной модели");
+      throw new Error("Кривой ответ Qwen");
+    }
+    const content =
+      data &&
+      data.choices &&
+      data.choices[0] &&
+      data.choices[0].message &&
+      data.choices[0].message.content;
+    if (!content) throw new Error("Пустой ответ Qwen");
+    return content;
+  },
+
+  async callFree(message, projectId, state, history) {
+    const wait = this.FREE.cooldownMs - (Date.now() - (this.FREE.lastCallAt || 0));
+    if (wait > 0) {
+      throw new Error("Подожди " + Math.ceil(wait / 1000) + " сек и повтори.");
     }
 
-    if (typeof data === "string") return data;
-    const content =
-      (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) ||
-      data.content ||
-      data.text ||
-      data.reply;
-    if (!content) throw new Error("Пустой ответ бесплатной модели");
-    return content;
+    const messages = this.buildMessages(message, projectId, state, history, true);
+    let lastErr = null;
+
+    // 1) простой GET — лучше проходит с телефона
+    try {
+      const out = await this.requestFreeGet(messages);
+      this.FREE.lastCallAt = Date.now();
+      return out;
+    } catch (e) {
+      lastErr = e;
+    }
+
+    // 2) POST chat completions без ключа
+    for (const model of this.FREE.models) {
+      try {
+        const out = await this.requestFreePost(model, messages);
+        this.FREE.lastCallAt = Date.now();
+        return out;
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+
+    throw lastErr || new Error("Бесплатный канал недоступен");
+  },
+
+  flattenPrompt(messages) {
+    const parts = [];
+    for (const m of messages || []) {
+      if (!m || !m.content) continue;
+      if (m.role === "system") parts.push("SYSTEM:\n" + m.content);
+      else if (m.role === "user") parts.push("USER:\n" + m.content);
+      else if (m.role === "assistant") parts.push("ASSISTANT:\n" + m.content);
+    }
+    parts.push('Ответь одним JSON: {"reply":"...","patches":[]}');
+    return parts.join("\n\n").slice(0, 3500);
+  },
+
+  async requestFreeGet(messages) {
+    const prompt = this.flattenPrompt(messages);
+    let lastErr = null;
+    for (const base of this.FREE.getBases) {
+      for (const model of this.FREE.models) {
+        const url =
+          base +
+          encodeURIComponent(prompt) +
+          (base.includes("gen.pollinations") ? "?model=" + encodeURIComponent(model) : "");
+        try {
+          const res = await this.fetchTimeout(url, { method: "GET" }, 50000);
+          const text = await res.text();
+          if (!res.ok) {
+            throw new Error(String(text || res.status).slice(0, 220));
+          }
+          if (!text || !text.trim()) throw new Error("Пустой ответ");
+          return text.trim();
+        } catch (e) {
+          lastErr = e;
+        }
+      }
+    }
+    throw lastErr || new Error("GET free failed");
+  },
+
+  async requestFreePost(model, messages) {
+    const res = await this.fetchTimeout(
+      this.FREE.postEndpoint,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model,
+          messages: messages.slice(-5),
+          temperature: 0.55,
+        }),
+      },
+      45000
+    );
+    const detail = await res.text();
+    if (!res.ok) {
+      let parsed = detail;
+      try {
+        const j = JSON.parse(detail);
+        parsed = (j.error && (j.error.message || j.error)) || detail;
+      } catch (_) {}
+      throw new Error(String(parsed).slice(0, 220));
+    }
+    try {
+      const data = JSON.parse(detail);
+      const content =
+        (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) ||
+        data.content ||
+        data.text;
+      if (!content) throw new Error("Пустой ответ");
+      return content;
+    } catch (e) {
+      if (detail && detail.trim()) return detail.trim();
+      throw e;
+    }
+  },
+
+  friendlyError(err) {
+    const msg = String((err && err.message) || err || "");
+    if (/402|Payment Required|budget|pollen|Insufficient/i.test(msg)) {
+      return "Лимит бесплатного канала. Подожди минуту или вставь ключ Qwen (Model Studio).";
+    }
+    if (/Load failed|Failed to fetch|NetworkError|network/i.test(msg)) {
+      return "Сеть оборвала запрос. Попробуй ещё раз; для Qwen иногда нужен VPN.";
+    }
+    if (/401|Unauthorized|InvalidApiKey|invalid.*key/i.test(msg)) {
+      return "Ключ Qwen не принят. Создай новый на home.qwencloud.com → API Keys.";
+    }
+    if (/Model not exist|not found|InvalidParameter/i.test(msg)) {
+      return "Модель недоступна на этом регионе — пробую другие автоматически. Если снова ошибка: смени ключ/регион.";
+    }
+    if (/Таймаут|подожди/i.test(msg)) return msg;
+    return msg.slice(0, 280);
+  },
+
+  keyFingerprint(key) {
+    const k = String(key || "").trim();
+    if (k.length < 12) return k;
+    return k.slice(0, 8) + "…" + k.slice(-4);
+  },
+
+  async verifyQwenKey(key) {
+    const clean = String(key || "").trim();
+    if (!clean || !/^sk-/i.test(clean) || /^sk-or-/i.test(clean)) {
+      throw new Error("Нужен ключ DashScope / Qwen Cloud вида sk-… (не OpenRouter sk-or-)");
+    }
+
+    let lastErr = null;
+    for (const endpoint of this.QWEN.endpoints) {
+      try {
+        await this.requestChatCompletions(endpoint, clean, this.QWEN.models[0], [
+          { role: "user", content: 'Ответь строго JSON: {"reply":"ок","patches":[]}' },
+        ]);
+        return { ok: true, fingerprint: this.keyFingerprint(clean), endpoint };
+      } catch (e) {
+        lastErr = e;
+        if (/401|Unauthorized|InvalidApiKey|invalid.*key/i.test(String(e.message || e))) {
+          // пробуем второй регион — ключ может быть только для CN или только для intl
+          continue;
+        }
+      }
+    }
+    throw lastErr || new Error("Ключ не прошёл проверку");
+  },
+
+  // старое имя — чтобы не ломать вызовы в app.js
+  async verifyOpenRouterKey(key) {
+    return this.verifyQwenKey(key);
   },
 
   parseModelJson(raw) {
     let text = String(raw || "").trim();
     const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/);
     if (fence) text = fence[1].trim();
+    const inline = text.match(/\{[\s\S]*"reply"[\s\S]*\}/);
+    if (inline) {
+      try {
+        const obj = JSON.parse(inline[0]);
+        return {
+          reply: String(obj.reply || obj.message || "").trim() || "Пустой ответ.",
+          patches: Array.isArray(obj.patches) ? obj.patches : [],
+        };
+      } catch (_) {}
+    }
     try {
       const obj = JSON.parse(text);
       return {

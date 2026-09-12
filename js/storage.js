@@ -60,25 +60,42 @@ window.Store = {
     });
     if (state.tab === "boss") state.tab = "chat";
     if (state.ai) {
-      state.ai.openrouterModel = "google/gemma-4-31b-it:free";
-      if (state.ai.provider === "gemini") state.ai.provider = "openrouter";
-      if (!state.ai.provider || state.ai.provider === "pollinations") state.ai.provider = "free";
+      if (state.ai.provider === "gemini" || state.ai.provider === "openrouter" || state.ai.provider === "pollinations") {
+        state.ai.provider = "auto";
+      }
+      if (!state.ai.provider) state.ai.provider = "auto";
       if (state.ai.apiKey && /^AIza/i.test(state.ai.apiKey)) {
         state.ai.apiKey = "";
+        state.ai.keyOk = false;
       }
+      // старый OpenRouter ключ больше не основной канал
+      if (state.ai.apiKey && /^sk-or-/i.test(state.ai.apiKey)) {
+        state.ai.openrouterKeyLegacy = state.ai.apiKey;
+        state.ai.apiKey = "";
+        state.ai.keyOk = false;
+        state.ai.keyFp = "";
+        state.ai.keyStatus = "Нужен ключ Qwen (sk-…), не OpenRouter.";
+        state.ai.showKeyEditor = true;
+      }
+      if (!state.ai.qwenModel) state.ai.qwenModel = "qwen-plus";
     }
 
-    // Старые чаты были одним списком → переносим в «Бесплатный», OpenRouter пустой
+    // Один общий чат на проект (склеиваем старые free + openrouter)
     if (!state.chat || typeof state.chat !== "object") state.chat = {};
     for (const pid of ["lifeRpg", "trailOn"]) {
       const bucket = state.chat[pid];
       if (Array.isArray(bucket)) {
-        state.chat[pid] = { free: bucket, openrouter: [] };
-      } else if (!bucket || typeof bucket !== "object") {
-        state.chat[pid] = { free: [], openrouter: [] };
+        state.chat[pid] = bucket;
+      } else if (bucket && typeof bucket === "object") {
+        const merged = []
+          .concat(Array.isArray(bucket.main) ? bucket.main : [])
+          .concat(Array.isArray(bucket.free) ? bucket.free : [])
+          .concat(Array.isArray(bucket.openrouter) ? bucket.openrouter : [])
+          .concat(Array.isArray(bucket.qwen) ? bucket.qwen : []);
+        merged.sort((a, b) => (a.at || 0) - (b.at || 0));
+        state.chat[pid] = merged.slice(-80);
       } else {
-        if (!Array.isArray(bucket.free)) bucket.free = [];
-        if (!Array.isArray(bucket.openrouter)) bucket.openrouter = [];
+        state.chat[pid] = [];
       }
     }
 
@@ -122,13 +139,13 @@ window.Store = {
       wins: [],
       installDismissed: false,
       chat: {
-        lifeRpg: { free: [], openrouter: [] },
-        trailOn: { free: [], openrouter: [] },
+        lifeRpg: [],
+        trailOn: [],
       },
       ai: {
-        provider: "free",
+        provider: "auto",
         apiKey: "",
-        openrouterModel: "google/gemma-4-31b-it:free",
+        qwenModel: "qwen-plus",
         keyOk: false,
         keyFp: "",
         keyStatus: "",
@@ -196,32 +213,30 @@ window.Store = {
       .map((n) => ({ title: n.title, body: n.body }));
   },
 
-  chatProvider(state) {
-    const p = String((state && state.ai && state.ai.provider) || "free").toLowerCase();
-    return p === "openrouter" || p === "gemini" ? "openrouter" : "free";
-  },
-
   ensureChat(state, projectId) {
     if (!state.chat) state.chat = {};
-    if (!state.chat[projectId] || Array.isArray(state.chat[projectId])) {
-      const legacy = Array.isArray(state.chat[projectId]) ? state.chat[projectId] : [];
-      state.chat[projectId] = { free: legacy, openrouter: [] };
+    const bucket = state.chat[projectId];
+    if (Array.isArray(bucket)) return bucket;
+    if (bucket && typeof bucket === "object") {
+      const merged = []
+        .concat(Array.isArray(bucket.main) ? bucket.main : [])
+        .concat(Array.isArray(bucket.free) ? bucket.free : [])
+        .concat(Array.isArray(bucket.openrouter) ? bucket.openrouter : [])
+        .concat(Array.isArray(bucket.qwen) ? bucket.qwen : []);
+      state.chat[projectId] = merged;
+      return state.chat[projectId];
     }
-    if (!Array.isArray(state.chat[projectId].free)) state.chat[projectId].free = [];
-    if (!Array.isArray(state.chat[projectId].openrouter)) state.chat[projectId].openrouter = [];
+    state.chat[projectId] = [];
     return state.chat[projectId];
   },
 
-  getChat(state, projectId, provider) {
-    const bucket = this.ensureChat(state, projectId);
-    const key = provider === "openrouter" ? "openrouter" : "free";
-    return bucket[key];
+  getChat(state, projectId) {
+    return this.ensureChat(state, projectId);
   },
 
-  setChat(state, projectId, provider, messages) {
-    const bucket = this.ensureChat(state, projectId);
-    const key = provider === "openrouter" ? "openrouter" : "free";
-    bucket[key] = messages;
+  setChat(state, projectId, messages) {
+    if (!state.chat) state.chat = {};
+    state.chat[projectId] = Array.isArray(messages) ? messages : [];
   },
 
   save(state) {

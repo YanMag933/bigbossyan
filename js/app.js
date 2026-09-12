@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const VER = "14";
+  const VER = "15";
   let state = Store.load();
   let deferredPrompt = null;
   let chatBusy = false;
@@ -447,43 +447,35 @@
 
   function renderChat() {
     const p = project();
-    const provider = BossChat.provider(state);
-    const isFree = provider === "free";
-    const msgs = Store.getChat(state, p.id, provider).slice(-40);
-    const hasKey = BossChat.hasKey(state);
-    const keyValue = (state.ai && (state.ai.apiKey || state.ai.openrouterKey)) || "";
-    const chatLabel = isFree ? "Бесплатный" : "OpenRouter";
+    const msgs = Store.getChat(state, p.id).slice(-40);
+    const keyValue = (state.ai && state.ai.apiKey) || "";
+    const mode = BossChat.mode(state);
     const keyOk =
-      !isFree &&
+      mode === "qwen" &&
       !!keyValue &&
       state.ai.keyOk === true &&
       state.ai.keyFp === BossChat.keyFingerprint(keyValue);
-    const showKeyForm = isFree ? false : !keyOk || state.ai.showKeyEditor === true;
+    const showKeyForm = !keyOk || state.ai.showKeyEditor === true;
     const keyStatus = state.ai.keyStatus || "";
     return `
       ${projectSwitchHtml()}
       <div class="hero-block">
         <h2 style="font-size:clamp(22px,6.5vw,30px)">Чат босса</h2>
-        <p>Два отдельных чата — переключай ИИ и сравнивай ответы.</p>
+        <p>Один чат. Без ключа — бесплатный канал. С ключом Qwen — как в Qwen Studio.</p>
       </div>
 
       <div class="panel">
-        <div class="tiny muted" style="margin-bottom:8px">ИИ / чат</div>
-        <div class="seg" id="ai-provider">
-          <button type="button" class="seg-btn ${!isFree ? "active" : ""}" data-ai-provider="openrouter">OpenRouter</button>
-          <button type="button" class="seg-btn ${isFree ? "active" : ""}" data-ai-provider="free">Бесплатный</button>
-        </div>
+        <div class="tiny muted" style="margin-bottom:8px">Сейчас: ${esc(BossChat.modelLabel(state))}</div>
         ${
-          isFree
-            ? `<p class="small muted" style="margin:12px 0 0;line-height:1.45">Чат «Бесплатный»: ${esc(BossChat.modelLabel(state))}. История не смешивается с OpenRouter.</p>`
-            : keyOk && !showKeyForm
-              ? `<div style="margin-top:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
-                  <p class="small" style="margin:0;line-height:1.45;color:var(--gold,#d4af37)">Ключ OpenRouter работает · ${esc(BossChat.modelLabel(state))}</p>
-                  <button type="button" class="btn secondary" id="change-ai-key" style="width:auto;padding:8px 12px">Сменить</button>
-                </div>
-                <p class="small muted" style="margin:8px 0 0;line-height:1.4">${esc(state.ai.keyFp || "")}</p>`
-              : `<label class="field" style="margin-top:12px">Ключ OpenRouter
-          <textarea id="ai-key" rows="3" placeholder="Вставь сюда sk-or-… (можно длинно)" autocomplete="off" spellcheck="false" ${keyCheckBusy ? "disabled" : ""} style="resize:vertical;min-height:72px;font-family:ui-monospace,monospace;font-size:13px;line-height:1.35">${esc(keyValue)}</textarea>
+          keyOk && !showKeyForm
+            ? `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+                <p class="small" style="margin:0;line-height:1.45;color:var(--gold,#d4af37)">Ключ Qwen работает</p>
+                <button type="button" class="btn secondary" id="change-ai-key" style="width:auto;padding:8px 12px">Сменить</button>
+              </div>
+              <p class="small muted" style="margin:8px 0 0;line-height:1.4">${esc(state.ai.keyFp || "")}</p>
+              <p class="small muted" style="margin:8px 0 0;line-height:1.45">Ключ берётся в Model Studio / Qwen Cloud (не из приложения Studio).</p>`
+            : `<label class="field">Ключ Qwen (необязательно)
+          <textarea id="ai-key" rows="3" placeholder="sk-… с home.qwencloud.com → API Keys&#10;Без ключа чат тоже работает" autocomplete="off" spellcheck="false" ${keyCheckBusy ? "disabled" : ""} style="resize:vertical;min-height:72px;font-family:ui-monospace,monospace;font-size:13px;line-height:1.35">${esc(keyValue)}</textarea>
         </label>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
           <button type="button" class="btn secondary block" id="paste-ai-key" ${keyCheckBusy ? "disabled" : ""}>Вставить</button>
@@ -492,16 +484,16 @@
         <p class="small muted" style="margin:10px 0 0;line-height:1.45">
           ${
             keyCheckBusy
-              ? "Проверяю ключ на OpenRouter…"
+              ? "Проверяю ключ Qwen…"
               : keyStatus
                 ? esc(keyStatus)
-                : "После сохранения сразу проверю ключ. Модель: " + esc(BossChat.modelLabel(state)) + "."
+                : "1) home.qwencloud.com → войти 2) API Keys → Create 3) вставь сюда. Приложение Studio ключ не выдаёт."
           }
         </p>`
         }
       </div>
 
-      <div class="section-title">Чат · ${esc(chatLabel)}</div>
+      <div class="section-title">Чат</div>
       <div class="chat-box panel" id="chat-box">
         ${
           msgs.length
@@ -514,23 +506,19 @@
           </div>`
                 )
                 .join("")
-            : `<div class="empty">${
-                hasKey
-                  ? "Пустой чат «" + chatLabel + "». Задай тот же вопрос в обоих чатах и сравни."
-                  : "Сохрани рабочий ключ или открой чат «Бесплатный»."
-              }</div>`
+            : '<div class="empty">Спроси что угодно — «что делать в первую очередь?», цены, план…</div>'
         }
         ${chatBusy ? '<div class="bubble bot"><div class="bubble-text">Думаю над ответом…</div></div>' : ""}
       </div>
 
       <form class="chat-form" id="chat-form">
-        <input type="text" id="chat-input" maxlength="1200" placeholder="${hasKey ? "Сообщение…" : "Сначала рабочий ключ или «Бесплатный»"}" autocomplete="off" ${chatBusy || keyCheckBusy || !hasKey ? "disabled" : ""} />
-        <button type="submit" class="btn" ${chatBusy || keyCheckBusy || !hasKey ? "disabled" : ""}>→</button>
+        <input type="text" id="chat-input" maxlength="1200" placeholder="Сообщение…" autocomplete="off" ${chatBusy || keyCheckBusy ? "disabled" : ""} />
+        <button type="submit" class="btn" ${chatBusy || keyCheckBusy ? "disabled" : ""}>→</button>
       </form>
 
       <div class="section-title">Сброс</div>
       <div class="panel">
-        <button type="button" class="btn secondary block" id="clear-chat">Очистить чат «${esc(chatLabel)}»</button>
+        <button type="button" class="btn secondary block" id="clear-chat">Очистить чат</button>
         <button type="button" class="btn secondary block" id="reset-btn" style="margin-top:8px">Сбросить весь прогресс</button>
       </div>
     `;
@@ -539,9 +527,20 @@
   async function saveAndVerifyKey(rawKey) {
     const key = String(rawKey || "").trim();
     if (!key) {
+      state.ai.apiKey = "";
       state.ai.keyOk = false;
       state.ai.keyFp = "";
-      state.ai.keyStatus = "Вставь ключ sk-or-…";
+      state.ai.keyStatus = "Без ключа — бесплатный канал.";
+      state.ai.showKeyEditor = true;
+      state.ai.provider = "auto";
+      save();
+      render();
+      return;
+    }
+    if (/^sk-or-/i.test(key)) {
+      state.ai.keyOk = false;
+      state.ai.keyFp = "";
+      state.ai.keyStatus = "Это ключ OpenRouter. Нужен ключ Qwen (sk-… без or).";
       state.ai.showKeyEditor = true;
       save();
       render();
@@ -549,23 +548,24 @@
     }
     keyCheckBusy = true;
     state.ai.apiKey = key;
-    state.ai.provider = "openrouter";
-    state.ai.openrouterModel = BossChat.OPENROUTER.model;
+    state.ai.provider = "auto";
+    state.ai.qwenModel = "qwen-plus";
     state.ai.keyOk = false;
-    state.ai.keyStatus = "Проверяю ключ…";
+    state.ai.keyStatus = "Проверяю ключ Qwen…";
     state.ai.showKeyEditor = true;
     save();
     render();
     try {
-      const verified = await BossChat.verifyOpenRouterKey(key);
+      const verified = await BossChat.verifyQwenKey(key);
       state.ai.keyOk = true;
       state.ai.keyFp = verified.fingerprint;
       state.ai.keyStatus = "";
       state.ai.showKeyEditor = false;
+      if (verified.endpoint) state.ai.qwenEndpoint = verified.endpoint;
     } catch (e) {
       state.ai.keyOk = false;
       state.ai.keyFp = "";
-      state.ai.keyStatus = "Ключ не прошёл проверку: " + BossChat.friendlyError(e);
+      state.ai.keyStatus = "Ключ не прошёл: " + BossChat.friendlyError(e);
       state.ai.showKeyEditor = true;
     }
     keyCheckBusy = false;
@@ -653,14 +653,9 @@
   async function sendChat(text) {
     const msg = (text || "").trim();
     if (!msg || chatBusy) return;
-    if (!BossChat.hasKey(state)) {
-      render();
-      return;
-    }
     const pid = state.activeProject;
-    const provider = BossChat.provider(state);
-    const thread = Store.getChat(state, pid, provider);
-    thread.push({ role: "user", text: msg, at: Date.now(), provider });
+    const thread = Store.getChat(state, pid);
+    thread.push({ role: "user", text: msg, at: Date.now() });
     chatBusy = true;
     save();
     render();
@@ -673,15 +668,14 @@
         text: result.reply,
         applied,
         at: Date.now(),
-        provider,
+        via: BossChat.mode(state),
       });
-      if (thread.length > 60) Store.setChat(state, pid, provider, thread.slice(-60));
+      if (thread.length > 60) Store.setChat(state, pid, thread.slice(-60));
     } catch (e) {
       thread.push({
         role: "assistant",
         text: "Не получилось достучаться до модели: " + BossChat.friendlyError(e),
         at: Date.now(),
-        provider,
       });
     }
     chatBusy = false;
@@ -826,28 +820,6 @@
       });
     }
 
-    app.querySelectorAll("[data-ai-provider]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        state.ai.provider = btn.dataset.aiProvider === "openrouter" ? "openrouter" : "free";
-        save();
-        render();
-      });
-    });
-
-    const aiKey = document.getElementById("ai-key");
-    if (aiKey) {
-      aiKey.addEventListener("change", () => {
-        const val = aiKey.value.trim();
-        if (val !== state.ai.apiKey) {
-          state.ai.keyOk = false;
-          state.ai.keyFp = "";
-          state.ai.keyStatus = "";
-        }
-        state.ai.apiKey = val;
-        save();
-      });
-    }
-
     const changeAiKey = document.getElementById("change-ai-key");
     if (changeAiKey) {
       changeAiKey.addEventListener("click", () => {
@@ -865,17 +837,16 @@
         try {
           const text = await navigator.clipboard.readText();
           if (!text || !text.trim()) {
-            alert("Буфер пустой. На OpenRouter нажми Copy у ключа, потом снова «Вставить».");
+            alert("Буфер пустой. Скопируй ключ sk-… в Qwen Cloud и снова «Вставить».");
             return;
           }
           if (input) input.value = text.trim();
           await saveAndVerifyKey(text.trim());
         } catch (e) {
           if (String(e && e.message || e).includes("Ключ")) {
-            // already handled in saveAndVerifyKey
             return;
           }
-          alert("Телефон не дал доступ к буферу. Вставь ключ вручную в поле и жми «Сохранить».");
+          alert("Телефон не дал доступ к буферу. Вставь ключ вручную и жми «Сохранить».");
           if (input) input.focus();
         }
       });
@@ -892,8 +863,7 @@
     const clearChat = document.getElementById("clear-chat");
     if (clearChat) {
       clearChat.addEventListener("click", () => {
-        const provider = BossChat.provider(state);
-        Store.setChat(state, state.activeProject, provider, []);
+        Store.setChat(state, state.activeProject, []);
         save();
         render();
       });
