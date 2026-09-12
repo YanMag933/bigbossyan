@@ -100,18 +100,16 @@ window.BossChat = {
   },
 
   async callNeural(message, projectId, state, history) {
-    const prompt = this.buildPrompt(message, projectId, state, history);
+    const messages = this.buildMessages(message, projectId, state, history);
     let lastErr = null;
 
     for (const model of this.FREE.models) {
       try {
-        const text = await this.withTimeout(this.fetchPollinations(prompt, model), this.FREE.timeoutMs);
+        const text = await this.withTimeout(this.fetchPollinations(messages, model), this.FREE.timeoutMs);
         if (text && text.trim()) return text.trim();
         throw new Error("Пустой ответ модели");
       } catch (e) {
         lastErr = e;
-        const msg = String((e && e.message) || e || "");
-        if (/402|Payment|quota/i.test(msg)) continue;
         continue;
       }
     }
@@ -119,17 +117,32 @@ window.BossChat = {
     throw lastErr || new Error("Нейросеть сейчас недоступна");
   },
 
-  async fetchPollinations(prompt, model) {
-    const q =
-      "https://text.pollinations.ai/" +
-      encodeURIComponent(prompt) +
-      "?model=" +
-      encodeURIComponent(model || "openai") +
-      "&temperature=0.55";
+  buildMessages(message, projectId, state, history) {
+    const messages = [{ role: "system", content: this.buildSystemPrompt(projectId, state) }];
+    for (const m of (history || []).slice(-4)) {
+      if (!m || !m.text) continue;
+      if (m.role === "user") messages.push({ role: "user", content: String(m.text).slice(0, 800) });
+      else if (m.role === "assistant") messages.push({ role: "assistant", content: String(m.text).slice(0, 1200) });
+    }
+    messages.push({ role: "user", content: String(message).slice(0, 1200) });
+    return messages;
+  },
+
+  async fetchPollinations(messages, model) {
+    const body = JSON.stringify({
+      messages,
+      model: model || "openai",
+      temperature: 0.55,
+    });
 
     let res;
     try {
-      res = await fetch(q, { method: "GET", cache: "no-store" });
+      res = await fetch("https://text.pollinations.ai/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+        cache: "no-store",
+      });
     } catch (e) {
       throw new Error("Сеть: не удалось связаться с нейросетью");
     }
@@ -139,6 +152,15 @@ window.BossChat = {
 
     const text = await res.text();
     if (!text || !String(text).trim()) throw new Error("Пустой ответ");
+
+    // Иногда OpenAI-формат JSON
+    try {
+      const obj = JSON.parse(text);
+      const choice = obj.choices && obj.choices[0] && obj.choices[0].message && obj.choices[0].message.content;
+      if (choice) return String(choice);
+      if (obj.reply) return String(obj.reply);
+    } catch (_) {}
+
     return text;
   },
 
