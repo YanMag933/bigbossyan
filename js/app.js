@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const VER = "2";
+  const VER = "3";
   let state = Store.load();
   let deferredPrompt = null;
   let chatBusy = false;
@@ -352,26 +352,26 @@
   function renderChat() {
     const p = project();
     const msgs = (state.chat[p.id] || []).slice(-40);
-    const mode = state.ai.mode || "local";
+    const hasKey = BossChat.hasKey(state);
     return `
       ${projectSwitchHtml()}
       <div class="hero-block">
         <h2 style="font-size:clamp(22px,6.5vw,30px)">Чат босса</h2>
-        <p>Советы по «${esc(p.name)}». Можно попросить поменять цену или формулировку — правки сразу в плане.</p>
+        <p>Один ИИ на Gemini: думает по контексту проекта, а не по заготовкам.</p>
       </div>
 
       <div class="panel">
-        <div class="tiny muted" style="margin-bottom:8px">Режим ИИ</div>
-        <div class="seg" id="ai-mode">
-          <button type="button" class="seg-btn ${mode === "local" ? "active" : ""}" data-ai-mode="local">Локальный</button>
-          <button type="button" class="seg-btn ${mode === "gemini" ? "active" : ""}" data-ai-mode="gemini">Gemini</button>
-        </div>
-        <div id="gemini-settings" class="${mode === "gemini" ? "" : "is-hidden"}" style="margin-top:12px">
-          <label class="field">API-ключ Google Gemini
-            <input type="password" id="gemini-key" value="${esc(state.ai.geminiKey || "")}" placeholder="AIza…" autocomplete="off" />
-          </label>
-          <p class="small muted" style="margin:8px 0 0;line-height:1.4">Ключ хранится только на этом телефоне. В Google Cloud ограничь ключ по HTTP-referrer (твой github.io).</p>
-        </div>
+        <label class="field">Ключ Gemini (бесплатно в AI Studio)
+          <input type="password" id="gemini-key" value="${esc(state.ai.geminiKey || "")}" placeholder="AIza…" autocomplete="off" />
+        </label>
+        <button type="button" class="btn secondary block" id="save-gemini" style="margin-top:10px">Сохранить ключ</button>
+        <p class="small muted" style="margin:10px 0 0;line-height:1.45">
+          ${
+            hasKey
+              ? "Ключ сохранён на этом устройстве. Модель видит прайс, прогресс и историю чата."
+              : "Без ключа чат не запустится — иначе снова будет пустой автомат. Ключ: aistudio.google.com/apikey"
+          }
+        </p>
       </div>
 
       <div class="chat-box panel" id="chat-box">
@@ -382,23 +382,28 @@
                   (m) => `
           <div class="bubble ${m.role === "user" ? "me" : "bot"}">
             <div class="bubble-text">${esc(m.text)}</div>
-            ${m.applied && m.applied.length ? `<div class="bubble-meta">Изменено: ${esc(m.applied.join("; "))}</div>` : ""}
+            ${m.applied && m.applied.length ? `<div class="bubble-meta">Изменено в плане: ${esc(m.applied.join("; "))}</div>` : ""}
           </div>`
                 )
                 .join("")
-            : `<div class="empty">Напиши, например: «измени цену Стандарт на 12900» или «что дальше по проекту?»</div>`
+            : `<div class="empty">${
+                hasKey
+                  ? "Спроси по делу: «предложи 3 варианта цены Стандарт и почему» — план сам не тронет, пока не скажешь «примени…»."
+                  : "Сначала сохрани ключ Gemini — потом пиши вопросы."
+              }</div>`
         }
-        ${chatBusy ? '<div class="bubble bot"><div class="bubble-text">Думаю…</div></div>' : ""}
+        ${chatBusy ? '<div class="bubble bot"><div class="bubble-text">Думаю над ответом…</div></div>' : ""}
       </div>
 
       <form class="chat-form" id="chat-form">
-        <input type="text" id="chat-input" maxlength="800" placeholder="Сообщение боссу…" autocomplete="off" ${chatBusy ? "disabled" : ""} />
-        <button type="submit" class="btn" ${chatBusy ? "disabled" : ""}>→</button>
+        <input type="text" id="chat-input" maxlength="1200" placeholder="${hasKey ? "Сообщение…" : "Сначала ключ Gemini"}" autocomplete="off" ${chatBusy || !hasKey ? "disabled" : ""} />
+        <button type="submit" class="btn" ${chatBusy || !hasKey ? "disabled" : ""}>→</button>
       </form>
 
       <div class="section-title">Сброс</div>
       <div class="panel">
-        <button type="button" class="btn secondary block" id="reset-btn">Сбросить прогресс и чат</button>
+        <button type="button" class="btn secondary block" id="clear-chat">Очистить чат проекта</button>
+        <button type="button" class="btn secondary block" id="reset-btn" style="margin-top:8px">Сбросить весь прогресс</button>
       </div>
     `;
   }
@@ -483,6 +488,10 @@
   async function sendChat(text) {
     const msg = (text || "").trim();
     if (!msg || chatBusy) return;
+    if (!BossChat.hasKey(state)) {
+      render();
+      return;
+    }
     const pid = state.activeProject;
     if (!state.chat[pid]) state.chat[pid] = [];
     state.chat[pid].push({ role: "user", text: msg, at: Date.now() });
@@ -491,7 +500,7 @@
     render();
 
     try {
-      const result = await BossChat.ask(msg, pid, state, state.ai);
+      const result = await BossChat.ask(msg, pid, state);
       const applied = ProjectLive.applyPatches(state, result.patches || []);
       state.chat[pid].push({
         role: "assistant",
@@ -503,7 +512,7 @@
     } catch (e) {
       state.chat[pid].push({
         role: "assistant",
-        text: "Ошибка: " + String(e.message || e),
+        text: "Не получилось достучаться до модели: " + String(e.message || e),
         at: Date.now(),
       });
     }
@@ -571,6 +580,26 @@
       geminiKey.addEventListener("change", () => {
         state.ai.geminiKey = geminiKey.value.trim();
         save();
+      });
+    }
+
+    const saveGemini = document.getElementById("save-gemini");
+    if (saveGemini) {
+      saveGemini.addEventListener("click", () => {
+        const input = document.getElementById("gemini-key");
+        state.ai.geminiKey = (input && input.value ? input.value : "").trim();
+        state.ai.model = "gemini-2.0-flash";
+        save();
+        render();
+      });
+    }
+
+    const clearChat = document.getElementById("clear-chat");
+    if (clearChat) {
+      clearChat.addEventListener("click", () => {
+        state.chat[state.activeProject] = [];
+        save();
+        render();
       });
     }
 

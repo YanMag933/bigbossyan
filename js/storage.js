@@ -70,7 +70,7 @@ window.Store = {
       wins: [],
       installDismissed: false,
       chat: { lifeRpg: [], trailOn: [] },
-      ai: { mode: "local", geminiKey: "", model: "gemini-2.0-flash" },
+      ai: { geminiKey: "", model: "gemini-2.0-flash" },
       docs: { audience: "investor", lastFile: null },
     };
   },

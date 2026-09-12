@@ -1,178 +1,150 @@
 window.BossChat = {
-  parseLocal(message, projectId, state) {
-    const text = String(message || "").trim();
-    const lower = text.toLowerCase();
-    const patches = [];
-    let reply = "";
+  MIN_PRICE: 500,
+  MODEL: "gemini-2.0-flash",
 
-    const priceMatch = text.match(
-      /(?:цен[уыае]|прайс|стоимость|пакет)\s*[«"]?([А-Яа-яA-Za-z0-9+.\-\s]{2,40})[»"]?\s*(?:на|→|=|поставь|сделай|измени|поменять|поменяй)?\s*(\d[\d\s]*)\s*(₽|руб(?:лей|ля)?)?/i
-    );
-    const priceMatch2 = text.match(
-      /(?:поставь|измени|поменяй|сделай)\s+(?:цен[уыае]\s+)?[«"]?([А-Яа-яA-Za-z0-9+.\-\s]{2,30})[»"]?\s*(?:на|=)\s*(\d[\d\s]*)\s*(₽|руб)?/i
-    );
-    const m = priceMatch || priceMatch2;
-
-    if (m) {
-      const pkg = m[1].replace(/\s+/g, " ").trim();
-      const num = m[2].replace(/\s+/g, "");
-      const price = num + " ₽";
-      const ctx = window.ProjectLive.contextForAi(projectId, state);
-      const advice = this.priceAdvice(ctx, pkg, Number(num));
-      patches.push({ op: "setPrice", projectId, package: this.normalizePackage(pkg, ctx), price });
-      reply =
-        advice +
-        `\n\nГотово: в плане проекта обновляю пакет «${this.normalizePackage(pkg, ctx)}» на ${price}. Открой «Аналитика» — там уже новая цена.`;
-      return { reply, patches };
-    }
-
-    if (/что\s+дальше|следующ|приоритет|с чего начать/.test(lower)) {
-      const next = window.Store.nextTasks(projectId, state, 3);
-      const p = window.ProjectLive.get(projectId, state);
-      reply =
-        `По «${p.name}» сейчас важнее всего:\n` +
-        next.map((t, i) => `${i + 1}. ${t.title} (${t.phaseTitle})`).join("\n") +
-        `\n\nВысокий приоритет из советов:\n` +
-        p.recommendations
-          .filter((r) => r.priority === "high")
-          .slice(0, 2)
-          .map((r) => `• ${r.title}: ${r.body}`)
-          .join("\n");
-      return { reply, patches };
-    }
-
-    if (/прогресс|сколько\s+сделано|процент/.test(lower)) {
-      const prog = window.Store.progress(projectId, state);
-      reply = `Прогресс «${window.ProjectLive.get(projectId, state).name}»: ${prog.pct}% (${prog.done} из ${prog.total} задач, с учётом веса).`;
-      return { reply, patches };
-    }
-
-    if (/побед|успех|запомни/.test(lower)) {
-      const winText = text.replace(/.*(победа|успех|запомни)[:\s-]*/i, "").trim() || text;
-      patches.push({ op: "addWin", projectId, text: winText.slice(0, 160) });
-      reply = "Записал в победы по текущему проекту.";
-      return { reply, patches };
-    }
-
-    const p = window.ProjectLive.get(projectId, state);
-    const hit = p.recommendations.find((r) =>
-      lower.split(/\s+/).some((w) => w.length > 4 && (r.title + r.body).toLowerCase().includes(w))
-    );
-    if (hit) {
-      reply = `${hit.title}\n\n${hit.body}\n\nЕсли нужно поменять цену в плане — напиши, например: «измени цену Стандарт на 12900».`;
-      return { reply, patches };
-    }
-
-    reply =
-      `Я локальный босс по «${p.name}». Могу:\n` +
-      `• посоветовать следующий шаг («что дальше?»)\n` +
-      `• разобрать и поменять цену («измени цену Стандарт на 12900»)\n` +
-      `• записать победу («победа: первая оплата»)\n` +
-      `• ответить глубже, если в Настройках чата включишь Gemini API-ключ.\n\n` +
-      `Сейчас в прайсе: ` +
-      p.analytics.pricing.map((x) => `${x.name} — ${x.price}`).join("; ") +
-      `.`;
-    return { reply, patches };
+  hasKey(state) {
+    return !!(state && state.ai && state.ai.geminiKey && state.ai.geminiKey.trim());
   },
 
-  normalizePackage(pkg, ctx) {
-    const names = (ctx.pricing || []).map((p) => p.name);
-    const found = names.find((n) => n.toLowerCase().includes(pkg.toLowerCase()) || pkg.toLowerCase().includes(n.toLowerCase()));
-    if (found) return found;
-    const map = {
-      стандарт: "Стандарт",
-      штаб: "Штаб",
-      год: "Живой год",
-      коуч: "Коуч (позже)",
-      точка: "Точка / мес",
-      внедрение: "Внедрение",
-      пилот: "Пилот",
-      партнёр: "Партнёр",
-      партнер: "Партнёр",
-    };
-    const key = Object.keys(map).find((k) => pkg.toLowerCase().includes(k));
-    return key ? map[key] : pkg;
-  },
-
-  priceAdvice(ctx, pkg, num) {
-    if (!num || Number.isNaN(num)) return "Цифру цены не разобрал.";
-    const lines = [];
-    if (ctx.projectId === "lifeRpg") {
-      if (/стандарт/i.test(pkg)) {
-        if (num < 4900) lines.push("Ниже ~5 тыс. ставит тебя рядом с курсом на Infоhit и обесценивает ручную сборку.");
-        else if (num > 19900) lines.push("Выше ~20 тыс. без кейсов и сопровождения сложно закрывать холодным.");
-        else if (num >= 9900 && num <= 12900) lines.push("Это сильный коридор: дорогое приложение / дешёвый месяц коуча. Ок.");
-        else if (num < 9900) lines.push("Чуть ниже текущего якоря 9 900 — можно как акцию, но не как постоянный прайс, пока сборка ручная.");
-        else lines.push("Между Стандартом и Штабом — нормально, если добавишь ощутимую ценность (разборы/созвоны).");
-      } else if (/штаб/i.test(pkg)) {
-        if (num < 15000) lines.push("Штаб не должен быть почти как Стандарт — иначе все возьмут дешёвый пакет.");
-        else lines.push("Штаб = сопровождение. Цена должна чувствоваться как «месяц коуча в кармане».");
-      }
-    } else {
-      if (/точк/i.test(pkg) || /подписк/i.test(pkg)) {
-        if (num < 2900) lines.push("Слишком дёшево для B2B с внедрением — потом трудно поднимать.");
-        else if (num > 7900) lines.push("Высоко для старта без кейса ROI — пилот может не закрыться.");
-        else lines.push("Коридор 3 900–5 900 ₽/точка/мес — рабочий для сетей.");
-      }
+  async ask(message, projectId, state) {
+    if (!this.hasKey(state)) {
+      return {
+        reply:
+          "Чтобы чат реально думал, нужен бесплатный ключ Gemini — без него будет только автомат из заготовок, а это уже бесит.\n\n" +
+          "1) Открой https://aistudio.google.com/apikey\n" +
+          "2) Create API key\n" +
+          "3) Вставь ключ в поле выше и нажми «Сохранить»\n\n" +
+          "Ключ остаётся только на этом телефоне.",
+        patches: [],
+      };
     }
-    if (!lines.length) lines.push("Сравнил с текущим прайсом проекта и рыночной логикой плана — правку могу внести.");
-    return lines.join(" ");
+
+    const history = (state.chat[projectId] || []).slice(-12);
+    const raw = await this.callGemini(message, projectId, state, history);
+    const parsed = this.parseModelJson(raw);
+    parsed.patches = this.sanitizePatches(parsed.patches || [], projectId, message);
+    return parsed;
   },
 
   buildSystemPrompt(projectId, state) {
     const ctx = window.ProjectLive.contextForAi(projectId, state);
     const otherId = projectId === "lifeRpg" ? "trailOn" : "lifeRpg";
     const other = window.ProjectLive.contextForAi(otherId, state);
-    return `Ты — бизнес-помощник BigBossYan для основателя Яна. Отвечай по-русски, коротко и по делу, премиальный тон без воды.
 
-Текущий проект в фокусе:
+    return `Ты — умный бизнес-советник внутри приложения BigBossYan для основателя Яна.
+Ты НЕ шаблонный бот. Сначала пойми вопрос, потом ответь по существу.
+
+Контекст текущего проекта:
 ${JSON.stringify(ctx, null, 2)}
 
-Второй проект (для сравнения):
-${JSON.stringify({ projectId: other.projectId, name: other.name, progressPct: other.progressPct, pricing: other.pricing }, null, 2)}
+Кратко второй проект (для сравнения, если уместно):
+${JSON.stringify(
+      {
+        projectId: other.projectId,
+        name: other.name,
+        progressPct: other.progressPct,
+        pricing: other.pricing,
+        stage: other.stage,
+      },
+      null,
+      2
+    )}
 
-Правила:
-1) Давай советы по монетизации, приоритетам, рискам.
-2) Если пользователь хочет изменить данные плана (цены, формулировки) — сначала кратко разбери идею (выше/ниже/ок), затем верни патчи.
-3) Ответ ВСЕГДА в JSON без markdown:
-{"reply":"текст пользователю","patches":[...]}
-4) Патчи:
-- {"op":"setPrice","projectId":"lifeRpg|trailOn","package":"имя пакета","price":"12900 ₽","forWhom":"опционально"}
-- {"op":"setField","projectId":"...","field":"oneLiner|tagline|position|stage|name|short","value":"..."}
-- {"op":"setUnit","projectId":"...","label":"...","value":"...","note":"..."}
-- {"op":"addWin","projectId":"...","text":"..."}
-- {"op":"completeTask","projectId":"...","taskId":"..."}
-5) Не выдумывай taskId. Не обещай юридические гарантии. patches может быть [].`;
+Как думать:
+- Прочитай вопрос буквально. «Предложи 3 варианта цены» = совет и сравнение, НЕ смена цены в плане.
+- Число «3» в таком вопросе — количество вариантов, НЕ цена 3 ₽.
+- Цены пакетов — обычно тысячи рублей (Life RPG ~5–25 тыс., TrailOn подписка ~3–7 тыс./точка).
+- Опирайся на прайс, прогресс, SWOT и рекомендации из контекста. Не выдумывай выручку, которой нет.
+- Отвечай по-русски, спокойно и по делу: сначала вывод/разбор, потом конкретика. Без грубости и без канцелярита.
+- Не раздувай ответ водой, но и не отвечай одной резкой фразой.
+
+Правки плана (patches):
+- По умолчанию patches = [].
+- Патч ставь ТОЛЬКО если пользователь ЯВНО просит изменить данные в приложении
+  (слова вроде: измени, поставь, примени, зафиксируй, обнови в плане) И назвал пакет + цену.
+- Если сомневаешься — patches пустой, предложи формулировку для подтверждения.
+- Никогда не ставь цену ниже 500 ₽ для пакетов.
+
+Формат ответа — строго JSON без markdown:
+{
+  "reply": "текст человеку",
+  "patches": []
+}
+
+Допустимые patches:
+{"op":"setPrice","projectId":"lifeRpg|trailOn","package":"точное имя пакета из прайса","price":"12900 ₽"}
+{"op":"setField","projectId":"...","field":"oneLiner|tagline|position|stage|name|short","value":"..."}
+{"op":"setUnit","projectId":"...","label":"...","value":"...","note":"..."}
+{"op":"addWin","projectId":"...","text":"..."}`;
   },
 
-  async askGemini(message, projectId, state, settings) {
-    const key = (settings && settings.geminiKey) || "";
-    if (!key) throw new Error("NO_KEY");
-    const model = (settings && settings.model) || "gemini-2.0-flash";
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`;
+  async callGemini(message, projectId, state, history) {
+    const key = state.ai.geminiKey.trim();
+    const model = (state.ai.model || this.MODEL).trim() || this.MODEL;
+    const url =
+      "https://generativelanguage.googleapis.com/v1beta/models/" +
+      encodeURIComponent(model) +
+      ":generateContent?key=" +
+      encodeURIComponent(key);
+
+    const contents = [];
+    for (const m of history) {
+      if (!m || !m.text) continue;
+      if (m.role === "user") {
+        contents.push({ role: "user", parts: [{ text: m.text }] });
+      } else if (m.role === "assistant") {
+        contents.push({ role: "model", parts: [{ text: m.text }] });
+      }
+    }
+    // текущее сообщение уже добавлено в history как user до вызова — не дублируем, если последнее оно
+    const last = contents[contents.length - 1];
+    if (!last || last.role !== "user" || last.parts[0].text !== message) {
+      contents.push({ role: "user", parts: [{ text: message }] });
+    }
+
     const body = {
       systemInstruction: { parts: [{ text: this.buildSystemPrompt(projectId, state) }] },
-      contents: [{ role: "user", parts: [{ text: message }] }],
-      generationConfig: { temperature: 0.4, responseMimeType: "application/json" },
+      contents,
+      generationConfig: {
+        temperature: 0.55,
+        topP: 0.9,
+        maxOutputTokens: 1200,
+        responseMimeType: "application/json",
+      },
     };
+
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
+
     if (!res.ok) {
-      const err = await res.text();
-      throw new Error(err.slice(0, 240) || "Gemini error");
+      let detail = "";
+      try {
+        detail = await res.text();
+      } catch (_) {}
+      if (res.status === 400 || res.status === 403) {
+        throw new Error(
+          "Ключ отклонён или модель недоступна. Проверь ключ в AI Studio и что нет жёстких ограничений. " +
+            String(detail).slice(0, 160)
+        );
+      }
+      throw new Error("Gemini HTTP " + res.status + ": " + String(detail).slice(0, 180));
     }
+
     const data = await res.json();
-    const raw =
+    const parts =
       data &&
       data.candidates &&
       data.candidates[0] &&
       data.candidates[0].content &&
-      data.candidates[0].content.parts &&
-      data.candidates[0].content.parts.map((p) => p.text).join("");
-    return this.parseModelJson(raw);
+      data.candidates[0].content.parts;
+    if (!parts || !parts.length) {
+      const block = data && data.promptFeedback && data.promptFeedback.blockReason;
+      throw new Error(block ? "Запрос заблокирован: " + block : "Пустой ответ модели");
+    }
+    return parts.map((p) => p.text || "").join("");
   },
 
   parseModelJson(raw) {
@@ -182,29 +154,52 @@ ${JSON.stringify({ projectId: other.projectId, name: other.name, progressPct: ot
     try {
       const obj = JSON.parse(text);
       return {
-        reply: obj.reply || obj.message || text,
+        reply: String(obj.reply || obj.message || "").trim() || "Пустой ответ.",
         patches: Array.isArray(obj.patches) ? obj.patches : [],
       };
-    } catch {
-      return { reply: text || "Не смог разобрать ответ модели.", patches: [] };
+    } catch (_) {
+      // если модель вернула текст — покажем его, без патчей
+      return { reply: text || "Не разобрал ответ модели.", patches: [] };
     }
   },
 
-  async ask(message, projectId, state, settings) {
-    const mode = (settings && settings.mode) || "local";
-    if (mode === "gemini" && settings && settings.geminiKey) {
-      try {
-        return await this.askGemini(message, projectId, state, settings);
-      } catch (e) {
-        const local = this.parseLocal(message, projectId, state);
-        return {
-          reply:
-            `Gemini недоступен (${String(e.message || e).slice(0, 120)}). Ответил локально:\n\n` +
-            local.reply,
-          patches: local.patches,
-        };
+  wantsMutation(message) {
+    const lower = String(message || "").toLowerCase();
+    return /(?:^|\s)(измени|поставь|примени|зафиксируй|обнови\s+в\s+плане|поменяй|внеси\s+в\s+план)/.test(
+      lower
+    );
+  },
+
+  parsePriceAmount(price) {
+    const n = Number(String(price || "").replace(/[^\d]/g, ""));
+    return Number.isFinite(n) ? n : NaN;
+  },
+
+  sanitizePatches(patches, projectId, userMessage) {
+    if (!Array.isArray(patches) || !patches.length) return [];
+    // без явной команды на изменение — ничего не пишем в план
+    if (!this.wantsMutation(userMessage)) return [];
+
+    const out = [];
+    for (const p of patches) {
+      if (!p || !p.op) continue;
+      const pid = p.projectId || projectId;
+      if (p.op === "setPrice") {
+        const amount = this.parsePriceAmount(p.price);
+        if (!Number.isFinite(amount) || amount < this.MIN_PRICE) continue;
+        const pkg = String(p.package || p.name || "").trim();
+        if (!pkg) continue;
+        out.push({
+          op: "setPrice",
+          projectId: pid,
+          package: pkg,
+          price: amount.toLocaleString("ru-RU") + " ₽",
+          forWhom: p.forWhom || "",
+        });
+      } else if (["setField", "setUnit", "addWin", "completeTask"].includes(p.op)) {
+        out.push({ ...p, projectId: pid });
       }
     }
-    return this.parseLocal(message, projectId, state);
+    return out;
   },
 };
