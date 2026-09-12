@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const VER = "25";
+  const VER = "26";
   let state = Store.load();
   BossDocs.syncAll(state);
   Store.save(state);
@@ -206,7 +206,7 @@
       <div class="project-switch chat-mode-switch" role="tablist" aria-label="Режим чата">
         <button type="button" class="project-btn ${mode === "ai" ? "active" : ""}" data-chat-mode="ai">
           <strong>ИИ</strong>
-          <span>вшитый советник</span>
+          <span>нейросеть · советы</span>
         </button>
         <button type="button" class="project-btn ${mode === "project" ? "active" : ""}" data-chat-mode="project">
           <strong>Проект</strong>
@@ -503,8 +503,8 @@
         : Store.getChat(state, p.id).slice(-40);
     const empty =
       mode === "project"
-        ? "Спроси факты: «цены», «документ инвестор», «прогресс». Или: «измени цену Стандарта на 10900»."
-        : "Спроси: «что делать», «цены», «риски», «питч», «сценарии»…";
+        ? "Спроси факты: «цены», «патент», «документ инвестор». Или: «измени цену Стандарта на 10900»."
+        : "Спроси совет: «что важнее на этой неделе?», «риски оффера», «нужен ли патент?»…";
     return `
       ${projectSwitchHtml()}
       ${chatModeSwitchHtml()}
@@ -512,8 +512,8 @@
         <h2 style="font-size:clamp(22px,6.5vw,30px)">${mode === "project" ? "Чат проекта" : "Чат ИИ"}</h2>
         <p>${
           mode === "project"
-            ? "Глубокий поиск по плану, заметкам и сохранённым Word — с подтверждением правок."
-            : "Вшитый советник внутри приложения. Без Puter, без регистрации на сторонних сайтах."
+            ? "Глубокий поиск по плану, заметкам, Word и блоку ИС — с подтверждением правок."
+            : "Живая нейросеть: анализ, приоритеты и советы. Не поиск по базе — рассуждает."
         }</p>
       </div>
 
@@ -521,8 +521,8 @@
         ${
           mode === "ai"
             ? `<p class="small" style="margin:0;line-height:1.45;color:var(--gold,#d4af37)">${esc(BossChat.modelLabel())}</p>
-               <p class="small muted" style="margin:8px 0 0;line-height:1.45">Отвечает по данным Life RPG / TrailOn: план, цены, SWOT, рекомендации. Интернет и чужие сайты не открывает.</p>`
-            : `<p class="small muted" style="margin:0;line-height:1.45">Ищет по прайсу, плану, заметкам, SWOT и актуальным текстам Word (обновляются сами при правках). Правки — только после подтверждения.</p>`
+               <p class="small muted" style="margin:8px 0 0;line-height:1.45">Без Puter и без регистрации. Для фактов и правок цифр в плане удобнее режим «Проект».</p>`
+            : `<p class="small muted" style="margin:0;line-height:1.45">Ищет по прайсу, плану, заметкам, SWOT, Word и патентам/ИС. Правки — только после подтверждения.</p>`
         }
       </div>
 

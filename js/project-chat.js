@@ -169,7 +169,6 @@ window.BossProjectChat = {
       const audTitle =
         (window.BossDocs && window.BossDocs.audiences[aud] && window.BossDocs.audiences[aud].title) || aud;
       push("doc", `Документ · ${d.title}`, d.text, { docId: d.id, audience: aud });
-      // куски абзацев — чтобы искать глубже внутри Word
       String(d.text || "")
         .split(/\n+/)
         .map((line) => line.trim())
@@ -179,6 +178,14 @@ window.BossProjectChat = {
           push("doc", `Документ (${audTitle}) · фрагмент ${i + 1}`, line, { docId: d.id, audience: aud });
         });
     });
+
+    if (p.ipRights) {
+      push("ip", "ИС · кратко", p.ipRights.summary || "");
+      (p.ipRights.what || []).forEach((line, i) => push("ip", `ИС · что ${i + 1}`, line));
+      (p.ipRights.how || []).forEach((line, i) => push("ip", `ИС · как ${i + 1}`, line));
+      (p.ipRights.costs || []).forEach((line, i) => push("ip", `ИС · стоимость ${i + 1}`, line));
+      if (p.ipRights.note) push("ip", "ИС · примечание", p.ipRights.note);
+    }
 
     return items;
   },
@@ -200,6 +207,8 @@ window.BossProjectChat = {
     if (/рекоменд|совет/.test(t) && item.topic === "rec") b += 8;
     if (/стади|этап/.test(t) && item.topic === "stage") b += 8;
     if (/документ|ворд|docx|меморандум|инвестор|команд|покупател|кп\b/.test(t) && item.topic === "doc") b += 12;
+    if (/патент|роспатент|фипс|товарн\w*\s+знак|интеллект|авторск|программ\w*\s+для\s+эвм|ис\b|прав\w*\s+на\s+код/.test(t) && item.topic === "ip")
+      b += 14;
     if (/слоган|позиц|one.?liner|о\s+проекте/.test(t) && ["project", "tagline", "position", "oneLiner"].includes(item.topic))
       b += 6;
     return b;

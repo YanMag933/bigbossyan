@@ -140,6 +140,13 @@ window.ProjectLive = {
       })),
       recentWins: wins.map((w) => w.text),
       notes: window.Store.notesForAi(state, projectId, 6),
+      ipRights: p.ipRights
+        ? {
+            summary: p.ipRights.summary,
+            what: (p.ipRights.what || []).slice(0, 4),
+            costs: (p.ipRights.costs || []).slice(0, 3),
+          }
+        : null,
     };
   },
 };
