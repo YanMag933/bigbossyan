@@ -30,13 +30,33 @@ window.BossChat = {
     return "main";
   },
 
+  /** Убрать переносы/пробелы — с телефона ключ часто ломается на строки. */
+  normalizeKey(raw) {
+    return String(raw || "")
+      .replace(/[\s\u200b\u00a0]+/g, "")
+      .trim();
+  },
+
+  keyHint(raw) {
+    const key = this.normalizeKey(raw);
+    if (!key) return "Вставь ключ sk-… из Model Studio → API Key.";
+    if (/^sk-or-/i.test(key)) return "Это OpenRouter. Нужен ключ Qwen/DashScope (sk-… без or).";
+    if (/^sk-ws-/i.test(key) || (key.includes(".") && key.length > 80)) {
+      return "Это не API Key. Нужен обычный ключ sk-… (короткая строка без точек), кнопка API Key / Create API Key — не кусок из Java/cURL.";
+    }
+    if (!/^sk-[A-Za-z0-9]{16,}$/.test(key)) {
+      return "Формат странный. Ожидается sk- и буквы/цифры подряд, без пробелов и переносов.";
+    }
+    return "";
+  },
+
   getQwenKey(state) {
     if (!state || !state.ai) return "";
-    const key = String(state.ai.apiKey || state.ai.qwenKey || "").trim();
+    const key = this.normalizeKey(state.ai.apiKey || state.ai.qwenKey || "");
     if (!key) return "";
-    // OpenRouter-ключи сюда не пускаем
-    if (/^sk-or-/i.test(key) || /^AIza/i.test(key)) return "";
-    if (!/^sk-/i.test(key)) return "";
+    if (/^sk-or-/i.test(key) || /^AIza/i.test(key) || /^sk-ws-/i.test(key)) return "";
+    if (key.includes(".")) return "";
+    if (!/^sk-[A-Za-z0-9]+$/i.test(key)) return "";
     return key;
   },
 
@@ -352,7 +372,11 @@ window.BossChat = {
   },
 
   async verifyQwenKey(key) {
-    const clean = String(key || "").trim();
+    const clean = this.normalizeKey(key);
+    const hint = this.keyHint(clean);
+    if (hint && (!/^sk-[A-Za-z0-9]{16,}$/.test(clean) || /^sk-ws-/i.test(clean) || clean.includes("."))) {
+      throw new Error(hint);
+    }
     if (!clean || !/^sk-/i.test(clean) || /^sk-or-/i.test(clean)) {
       throw new Error("Нужен ключ DashScope / Qwen Cloud вида sk-… (не OpenRouter sk-or-)");
     }
@@ -366,8 +390,7 @@ window.BossChat = {
         return { ok: true, fingerprint: this.keyFingerprint(clean), endpoint };
       } catch (e) {
         lastErr = e;
-        if (/401|Unauthorized|InvalidApiKey|invalid.*key/i.test(String(e.message || e))) {
-          // пробуем второй регион — ключ может быть только для CN или только для intl
+        if (/401|Unauthorized|InvalidApiKey|invalid.*key|Incorrect API key/i.test(String(e.message || e))) {
           continue;
         }
       }

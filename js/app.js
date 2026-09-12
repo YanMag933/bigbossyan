@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const VER = "15";
+  const VER = "16";
   let state = Store.load();
   let deferredPrompt = null;
   let chatBusy = false;
@@ -475,7 +475,7 @@
               <p class="small muted" style="margin:8px 0 0;line-height:1.4">${esc(state.ai.keyFp || "")}</p>
               <p class="small muted" style="margin:8px 0 0;line-height:1.45">Ключ берётся в Model Studio / Qwen Cloud (не из приложения Studio).</p>`
             : `<label class="field">Ключ Qwen (необязательно)
-          <textarea id="ai-key" rows="3" placeholder="sk-… с home.qwencloud.com → API Keys&#10;Без ключа чат тоже работает" autocomplete="off" spellcheck="false" ${keyCheckBusy ? "disabled" : ""} style="resize:vertical;min-height:72px;font-family:ui-monospace,monospace;font-size:13px;line-height:1.35">${esc(keyValue)}</textarea>
+          <textarea id="ai-key" rows="3" placeholder="Только sk-… из API Key&#10;Не Java / cURL / Python код" autocomplete="off" spellcheck="false" ${keyCheckBusy ? "disabled" : ""} style="resize:vertical;min-height:72px;font-family:ui-monospace,monospace;font-size:13px;line-height:1.35">${esc(keyValue)}</textarea>
         </label>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
           <button type="button" class="btn secondary block" id="paste-ai-key" ${keyCheckBusy ? "disabled" : ""}>Вставить</button>
@@ -487,7 +487,7 @@
               ? "Проверяю ключ Qwen…"
               : keyStatus
                 ? esc(keyStatus)
-                : "1) home.qwencloud.com → войти 2) API Keys → Create 3) вставь сюда. Приложение Studio ключ не выдаёт."
+                : "Get API Key → Create API Key → скопируй одну строку sk-… (без точек и без кода)."
           }
         </p>`
         }
@@ -525,7 +525,7 @@
   }
 
   async function saveAndVerifyKey(rawKey) {
-    const key = String(rawKey || "").trim();
+    const key = BossChat.normalizeKey(rawKey);
     if (!key) {
       state.ai.apiKey = "";
       state.ai.keyOk = false;
@@ -537,10 +537,12 @@
       render();
       return;
     }
-    if (/^sk-or-/i.test(key)) {
+    const hint = BossChat.keyHint(key);
+    if (hint && (!/^sk-[A-Za-z0-9]{16,}$/.test(key) || /^sk-ws-/i.test(key) || key.includes("."))) {
+      state.ai.apiKey = "";
       state.ai.keyOk = false;
       state.ai.keyFp = "";
-      state.ai.keyStatus = "Это ключ OpenRouter. Нужен ключ Qwen (sk-… без or).";
+      state.ai.keyStatus = hint;
       state.ai.showKeyEditor = true;
       save();
       render();
