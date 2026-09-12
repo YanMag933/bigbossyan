@@ -1,4 +1,4 @@
-﻿const CACHE = "bigbossyan-v31";
+﻿const CACHE = "bigbossyan-v32";
 const ASSETS = [
   "./",
   "./index.html",
@@ -8,7 +8,6 @@ const ASSETS = [
   "./js/glossary.js",
   "./js/storage.js",
   "./js/project.js",
-  "./js/chat.js",
   "./js/project-chat.js",
   "./js/docs.js",
   "./js/app.js",

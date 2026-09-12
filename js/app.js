@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const VER = "31";
+  const VER = "32";
   let state = Store.load();
   BossDocs.syncAll(state);
   Store.save(state);
@@ -19,7 +19,7 @@
     hq: "Штаб",
     plan: "План",
     analytics: "Аналитика",
-    chat: "Чат",
+    chat: "Секретарь",
     docs: "Документ",
   };
 
@@ -203,19 +203,74 @@
       </div>`;
   }
 
-  function chatModeSwitchHtml() {
-    const mode = chatMode();
+  function renderChatBubble(m) {
+    const pending =
+      m.role === "assistant" &&
+      m.pendingPatches &&
+      m.pendingPatches.length &&
+      !m.applied &&
+      !m.rejected;
     return `
-      <div class="project-switch chat-mode-switch" role="tablist" aria-label="Режим чата">
-        <button type="button" class="project-btn ${mode === "ai" ? "active" : ""}" data-chat-mode="ai">
-          <strong>ИИ</strong>
-          <span>ChatGPT · советы</span>
-        </button>
-        <button type="button" class="project-btn ${mode === "project" ? "active" : ""}" data-chat-mode="project">
-          <strong>Проект</strong>
-          <span>поиск и правки</span>
-        </button>
+      <div class="bubble ${m.role === "user" ? "me" : "bot"}">
+        <div class="bubble-text">${esc(m.text)}</div>
+        ${
+          m.applied && m.applied.length
+            ? `<div class="bubble-meta">Синхронизировано: ${esc(m.applied.join("; "))}</div>`
+            : ""
+        }
+        ${m.rejected ? `<div class="bubble-meta muted">Правка отклонена</div>` : ""}
+        ${
+          pending
+            ? `<div class="bubble-actions">
+                <button type="button" class="btn" data-confirm-patch="${esc(String(m.at))}">Применить</button>
+                <button type="button" class="btn secondary" data-reject-patch="${esc(String(m.at))}">Отклонить</button>
+              </div>`
+            : ""
+        }
       </div>`;
+  }
+
+  function renderChat() {
+    const p = project();
+    const msgs = Store.getProjectChat(state, p.id).slice(-40);
+    const empty =
+      "Поиск: «цены», «оферта», «патент». Правка: «измени цену Стандарта на 10900» — подтверди «да».";
+    return `
+      ${projectSwitchHtml()}
+      <div class="hero-block">
+        <h2 style="font-size:clamp(22px,6.5vw,30px)">Чат секретарь</h2>
+        <p>Поиск по проекту, замена с подтверждением, синхронизация плана и Word-документов.</p>
+      </div>
+
+      <div class="panel">
+        <p class="small muted" style="margin:0;line-height:1.45">Секретарь не нейросеть: отвечает фактами из штаба. После «Применить» обновляются план, аналитика и тексты документов для генерации.</p>
+      </div>
+
+      <div class="section-title">Сообщения</div>
+      <div class="chat-box panel" id="chat-box">
+        ${
+          msgs.length
+            ? msgs.map((m) => renderChatBubble(m)).join("")
+            : `<div class="empty">${empty}</div>`
+        }
+        ${
+          chatBusy
+            ? `<div class="bubble bot"><div class="bubble-text">Смотрю в проект…</div></div>`
+            : ""
+        }
+      </div>
+
+      <form class="chat-form" id="chat-form">
+        <input type="text" id="chat-input" maxlength="1200" placeholder="Поиск или правка…" autocomplete="off" ${chatBusy ? "disabled" : ""} />
+        <button type="submit" class="btn" ${chatBusy ? "disabled" : ""}>→</button>
+      </form>
+
+      <div class="section-title">Сброс</div>
+      <div class="panel">
+        <button type="button" class="btn secondary block" id="clear-chat">Очистить чат секретаря</button>
+        <button type="button" class="btn secondary block" id="reset-btn" style="margin-top:8px">Сбросить весь прогресс</button>
+      </div>
+    `;
   }
 
   function taskHtml(task, phaseTitle) {
@@ -279,7 +334,7 @@
         ${
           next.length
             ? next.map((t) => taskHtml(t, t.phaseTitle)).join("")
-            : '<div class="panel empty">Все задачи отмечены. Напиши в Чат или сгенерируй документ.</div>'
+            : '<div class="panel empty">Все задачи отмечены. Напиши секретарю или сгенерируй документ.</div>'
         }
       </div>
 
@@ -671,7 +726,7 @@
           { h: "Суть", t: r.body },
           {
             h: "Как применить",
-            t: "Перенеси в ближайшие задачи плана или в чат проекта: «отметь задачу …» / уточни формулировку в Word для нужной аудитории.",
+            t: "Перенеси в ближайшие задачи плана или скажи секретарю: «отметь задачу …» / уточни формулировку в Word для нужной аудитории.",
           },
         ],
       };
@@ -705,110 +760,6 @@
           </div>`
           )
           .join("")}
-      </div>
-    `;
-  }
-
-  function chatMode() {
-    return state.ui && state.ui.chatMode === "project" ? "project" : "ai";
-  }
-
-  function renderChatBubble(m, mode) {
-    const pending =
-      mode === "project" &&
-      m.role === "assistant" &&
-      m.pendingPatches &&
-      m.pendingPatches.length &&
-      !m.applied &&
-      !m.rejected;
-    return `
-      <div class="bubble ${m.role === "user" ? "me" : "bot"}">
-        <div class="bubble-text">${esc(m.text)}</div>
-        ${
-          m.applied && m.applied.length
-            ? `<div class="bubble-meta">Изменено: ${esc(m.applied.join("; "))}</div>`
-            : ""
-        }
-        ${m.rejected ? `<div class="bubble-meta muted">Правка отклонена</div>` : ""}
-        ${
-          pending
-            ? `<div class="bubble-actions">
-                <button type="button" class="btn" data-confirm-patch="${esc(String(m.at))}">Применить</button>
-                <button type="button" class="btn secondary" data-reject-patch="${esc(String(m.at))}">Отклонить</button>
-              </div>`
-            : ""
-        }
-      </div>`;
-  }
-
-  function renderChat() {
-    const p = project();
-    const mode = chatMode();
-    const msgs =
-      mode === "project"
-        ? Store.getProjectChat(state, p.id).slice(-40)
-        : Store.getChat(state, p.id).slice(-40);
-    const empty =
-      mode === "project"
-        ? "Спроси точно: «цены», «патент», «прогресс». Или: «измени цену Стандарта на 10900»."
-        : "Спроси совет: «что важнее на этой неделе?», «риски оффера», «нужен ли патент?»…";
-    return `
-      ${projectSwitchHtml()}
-      ${chatModeSwitchHtml()}
-      <div class="hero-block">
-        <h2 style="font-size:clamp(22px,6.5vw,30px)">${mode === "project" ? "Чат проекта" : "Чат ИИ"}</h2>
-        <p>${
-          mode === "project"
-            ? "Точные факты из плана, Word и ИС — без лишнего шума, правки с подтверждением."
-            : "Бесплатные нейросети без ключей. Переключай модель, если одна перегружена."
-        }</p>
-      </div>
-
-      <div class="panel">
-        ${
-          mode === "ai"
-            ? `<p class="small" style="margin:0;line-height:1.45;color:var(--gold,#d4af37)">${esc(BossChat.modelLabel(state))}</p>
-               <label class="field" style="margin-top:10px">Модель
-                 <select id="free-model-select">
-                   ${BossChat.FREE_MODELS.map(
-                     (m) =>
-                       `<option value="${esc(m.id)}" ${BossChat.selectedId(state) === m.id ? "selected" : ""}>${esc(m.label)}</option>`
-                   ).join("")}
-                 </select>
-               </label>
-               <p class="tiny muted" style="margin:8px 0 0;line-height:1.4;text-transform:none;letter-spacing:0">Ключи не нужны. Если «лимит» — подожди минуту или выбери другую модель. «Авто» сам перебирает маршруты.</p>`
-            : `<p class="small muted" style="margin:0;line-height:1.45">Поиск и правки по плану. Ответ — только по делу, без свалки Word и прогресса. Правки — после «да».</p>`
-
-        }
-      </div>
-
-      <div class="section-title">Сообщения</div>
-      <div class="chat-box panel" id="chat-box">
-        ${
-          msgs.length
-            ? msgs.map((m) => renderChatBubble(m, mode)).join("")
-            : `<div class="empty">${empty}</div>`
-        }
-        ${
-          chatBusy
-            ? `<div class="bubble bot"><div class="bubble-text">${
-                mode === "project" ? "Смотрю в проект…" : "Думаю над ответом…"
-              }</div></div>`
-            : ""
-        }
-      </div>
-
-      <form class="chat-form" id="chat-form">
-        <input type="text" id="chat-input" maxlength="1200" placeholder="${
-          mode === "project" ? "Поиск или правка…" : "Сообщение…"
-        }" autocomplete="off" ${chatBusy ? "disabled" : ""} />
-        <button type="submit" class="btn" ${chatBusy ? "disabled" : ""}>→</button>
-      </form>
-
-      <div class="section-title">Сброс</div>
-      <div class="panel">
-        <button type="button" class="btn secondary block" id="clear-chat">Очистить этот чат</button>
-        <button type="button" class="btn secondary block" id="reset-btn" style="margin-top:8px">Сбросить весь прогресс</button>
       </div>
     `;
   }
@@ -870,7 +821,7 @@
       ${projectSwitchHtml()}
       <div class="hero-block">
         <h2 style="font-size:clamp(22px,6.5vw,30px)">Документ</h2>
-        <p>Смотри текст на телефоне внутри приложения — или скачай .docx. База для чата «Проект» обновляется сама.</p>
+        <p>Смотри текст на телефоне или скачай .docx. Секретарь после правок сам обновляет базу документов.</p>
       </div>
 
       <div class="panel">
@@ -977,7 +928,14 @@
     msg.applied = applied;
     msg.pendingPatches = null;
     msg.text = (msg.text || "").replace(/\n\nПодтверди «да» или нажми «Применить»\./, "");
-    if (applied.length) msg.text = (msg.text ? msg.text + "\n\n" : "") + "Готово.";
+    if (applied.length && window.BossDocs) {
+      BossDocs.syncArchive(state, state.activeProject);
+    }
+    if (applied.length) {
+      msg.text =
+        (msg.text ? msg.text + "\n\n" : "") +
+        "Готово. Обновил штаб и документы (инвестор / команда / КП) — при следующей генерации будут новые цифры.";
+    }
     return applied;
   }
 
@@ -1001,10 +959,12 @@
       const applied = applyPendingMessage(pending);
       thread.push({
         role: "assistant",
-        text: applied.length ? "Применил: " + applied.join("; ") : "Нечего применять.",
+        text: applied.length
+          ? "Применил: " + applied.join("; ") + ".\nСинхронизировал план, аналитику и Word-документы."
+          : "Нечего применять.",
         applied,
         at: Date.now(),
-        via: "project",
+        via: "secretary",
       });
     } else if (result.rejectPendingId != null) {
       rejectPendingMessage(resolvePendingByAt(thread, result.rejectPendingId));
@@ -1013,7 +973,7 @@
         text: result.reply || "Правка отклонена.",
         rejected: true,
         at: Date.now(),
-        via: "project",
+        via: "secretary",
       });
     } else if (result.needsConfirm && result.patches && result.patches.length) {
       thread.push({
@@ -1021,14 +981,14 @@
         text: result.reply,
         pendingPatches: result.patches,
         at: Date.now(),
-        via: "project",
+        via: "secretary",
       });
     } else {
       thread.push({
         role: "assistant",
         text: result.reply,
         at: Date.now(),
-        via: "project",
+        via: "secretary",
       });
     }
 
@@ -1037,42 +997,8 @@
     render();
   }
 
-  async function sendAiChat(text) {
-    const msg = (text || "").trim();
-    if (!msg || chatBusy) return;
-    const pid = state.activeProject;
-    const thread = Store.getChat(state, pid);
-    thread.push({ role: "user", text: msg, at: Date.now() });
-    chatBusy = true;
-    save();
-    render();
-
-    try {
-      const result = await BossChat.ask(msg, pid, state);
-      const applied = ProjectLive.applyPatches(state, result.patches || []);
-      thread.push({
-        role: "assistant",
-        text: result.reply,
-        applied,
-        at: Date.now(),
-        via: BossChat.mode(),
-      });
-      if (thread.length > 60) Store.setChat(state, pid, thread.slice(-60));
-    } catch (e) {
-      thread.push({
-        role: "assistant",
-        text: "Не получилось: " + BossChat.friendlyError(e),
-        at: Date.now(),
-      });
-    }
-    chatBusy = false;
-    save();
-    render();
-  }
-
   function sendChat(text) {
-    if (chatMode() === "project") sendProjectChat(text);
-    else sendAiChat(text);
+    sendProjectChat(text);
   }
 
   async function generateDoc() {
@@ -1244,8 +1170,7 @@
     const clearChat = document.getElementById("clear-chat");
     if (clearChat) {
       clearChat.addEventListener("click", () => {
-        if (chatMode() === "project") Store.setProjectChat(state, state.activeProject, []);
-        else Store.setChat(state, state.activeProject, []);
+        Store.setProjectChat(state, state.activeProject, []);
         save();
         render();
       });
@@ -1260,26 +1185,6 @@
       });
     }
 
-    const modelSelect = document.getElementById("free-model-select");
-    if (modelSelect) {
-      modelSelect.addEventListener("change", () => {
-        if (!state.ai) state.ai = {};
-        state.ai.freeModel = modelSelect.value || "auto";
-        state.ai.provider = "free";
-        save();
-        render();
-      });
-    }
-
-    app.querySelectorAll("[data-chat-mode]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        if (!state.ui) state.ui = { notesMode: "closed", editingNoteId: null, chatMode: "ai" };
-        state.ui.chatMode = btn.dataset.chatMode === "project" ? "project" : "ai";
-        save();
-        render();
-      });
-    });
-
     app.querySelectorAll("[data-confirm-patch]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const thread = Store.getProjectChat(state, state.activeProject);
@@ -1288,10 +1193,10 @@
         if (applied.length) {
           thread.push({
             role: "assistant",
-            text: "Применил: " + applied.join("; "),
+            text: "Применил: " + applied.join("; ") + ".\nСинхронизировал план, аналитику и Word-документы.",
             applied,
             at: Date.now(),
-            via: "project",
+            via: "secretary",
           });
         }
         save();
@@ -1308,7 +1213,7 @@
           text: "Правка отклонена.",
           rejected: true,
           at: Date.now(),
-          via: "project",
+          via: "secretary",
         });
         save();
         render();

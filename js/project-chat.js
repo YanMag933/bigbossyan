@@ -490,7 +490,7 @@ window.BossProjectChat = {
           forWhom: row.forWhom || "",
         };
         return {
-          reply: `Сейчас: «${row.name}» — ${row.price}.\nПредлагаю: ${newPrice}.\n\nПодтверди «да» или нажми «Применить».`,
+          reply: `Сейчас: «${row.name}» — ${row.price}.\nПредлагаю: ${newPrice}.\n\nПосле подтверждения обновлю прайс в аналитике и во всех Word-документах.\nПодтверди «да» или нажми «Применить».`,
           patches: [patch],
           needsConfirm: true,
         };
