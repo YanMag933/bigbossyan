@@ -59,16 +59,15 @@ window.Store = {
     });
     if (state.tab === "boss") state.tab = "chat";
     if (state.ai) {
-      if (!state.ai.provider) state.ai.provider = "openrouter";
+      if (state.ai.provider === "gemini") state.ai.provider = "openrouter";
+      if (!state.ai.provider || state.ai.provider === "pollinations") state.ai.provider = "free";
       if (!state.ai.openrouterModel) {
         state.ai.openrouterModel =
           state.ai.model && !/^gemini/i.test(String(state.ai.model))
             ? state.ai.model
             : "deepseek/deepseek-chat-v3-0324:free";
       }
-      if (!state.ai.geminiModel) state.ai.geminiModel = "gemini-2.5-flash";
-      if (state.ai.apiKey && /^AIza/i.test(state.ai.apiKey) && !state.ai.geminiKey) {
-        state.ai.geminiKey = state.ai.apiKey;
+      if (state.ai.apiKey && /^AIza/i.test(state.ai.apiKey)) {
         state.ai.apiKey = "";
       }
     }
@@ -85,11 +84,9 @@ window.Store = {
       installDismissed: false,
       chat: { lifeRpg: [], trailOn: [] },
       ai: {
-        provider: "openrouter",
+        provider: "free",
         apiKey: "",
-        geminiKey: "",
         openrouterModel: "deepseek/deepseek-chat-v3-0324:free",
-        geminiModel: "gemini-2.5-flash",
       },
       docs: { audience: "investor", lastFile: null },
     };

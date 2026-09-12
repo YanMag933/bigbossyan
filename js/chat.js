@@ -11,45 +11,45 @@ window.BossChat = {
     ],
   },
 
-  GEMINI: {
-    models: ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-3.6-flash"],
+  FREE: {
+    endpoint: "https://text.pollinations.ai/openai",
+    models: ["openai-fast", "openai", "gemini-fast", "mistral"],
   },
 
   provider(state) {
-    const p = String((state && state.ai && state.ai.provider) || "openrouter").toLowerCase();
-    return p === "gemini" ? "gemini" : "openrouter";
+    const p = String((state && state.ai && state.ai.provider) || "free").toLowerCase();
+    if (p === "gemini" || p === "openrouter") return "openrouter";
+    if (p === "free" || p === "pollinations") return "free";
+    return "free";
   },
 
   getKey(state) {
     if (!state || !state.ai) return "";
-    if (this.provider(state) === "gemini") {
-      return String(state.ai.geminiKey || "").trim();
-    }
+    if (this.provider(state) === "free") return "";
     const key = String(state.ai.apiKey || state.ai.openrouterKey || "").trim();
     if (!key || /^AIza/i.test(key)) return "";
     return key;
   },
 
   hasKey(state) {
+    if (this.provider(state) === "free") return true;
     return !!this.getKey(state);
   },
 
   async ask(message, projectId, state) {
     const provider = this.provider(state);
-    if (!this.hasKey(state)) {
+    if (provider === "openrouter" && !this.getKey(state)) {
       return {
         reply:
-          provider === "gemini"
-            ? "Нет ключа Gemini.\n\n1) aistudio.google.com/apikey\n2) Create API key\n3) Вставь выше → «Сохранить»\n\nИз РФ Google иногда режет по локации — тогда переключись на OpenRouter."
-            : "Нет ключа OpenRouter.\n\n1) openrouter.ai/keys\n2) Create key\n3) Вставь выше → «Сохранить»\n\nКлюч только на этом устройстве. Если удобнее Gemini — переключи провайдер выше.",
+          "Нет ключа OpenRouter.\n\n1) openrouter.ai/keys → Create key\n2) Вставь выше → «Сохранить»\n\nИли переключись на «Бесплатный» — там ключ не нужен.",
         patches: [],
       };
     }
 
     const history = (state.chat[projectId] || []).slice(-12);
     const raw =
-      provider === "gemini"
-        ? await this.callGemini(message, projectId, state, history)
+      provider === "free"
+        ? await this.callFree(message, projectId, state, history)
         : await this.callOpenRouter(message, projectId, state, history);
     const parsed = this.parseModelJson(raw);
     parsed.patches = this.sanitizePatches(parsed.patches || [], projectId, message);
@@ -183,54 +183,42 @@ ${JSON.stringify(
     return content;
   },
 
-  async callGemini(message, projectId, state, history) {
-    const key = this.getKey(state);
-    const preferred = String((state.ai && state.ai.geminiModel) || this.GEMINI.models[0]).trim();
-    const models = [preferred].concat(this.GEMINI.models.filter((m) => m !== preferred));
-    const system = this.buildSystemPrompt(projectId, state);
-    const contents = [];
-    for (const m of history) {
-      if (!m || !m.text) continue;
-      if (m.role === "user") contents.push({ role: "user", parts: [{ text: m.text }] });
-      else if (m.role === "assistant") contents.push({ role: "model", parts: [{ text: m.text }] });
+  async callFree(message, projectId, state, history) {
+    const messages = this.buildMessages(message, projectId, state, history);
+    // Укорачиваем system: бесплатный лимит часто жёсткий
+    if (messages[0] && messages[0].role === "system") {
+      const short = messages[0].content;
+      if (short.length > 6000) messages[0].content = short.slice(0, 6000) + "\n…";
     }
-    const last = contents[contents.length - 1];
-    if (!last || last.role !== "user" || last.parts[0].text !== message) {
-      contents.push({ role: "user", parts: [{ text: message }] });
-    }
+    const hist = messages.filter((m) => m.role !== "system").slice(-8);
+    const payloadMessages = [messages[0]].concat(hist);
 
     let lastErr = null;
-    for (const model of models) {
+    for (const model of this.FREE.models) {
       try {
-        return await this.requestGemini(key, model, system, contents);
+        return await this.requestFree(model, payloadMessages);
       } catch (e) {
         lastErr = e;
         const msg = String(e.message || e);
-        if (/404|not found|NOT_FOUND|is not found/i.test(msg)) continue;
+        if (/402|429|rate|capacity|not found|404|Payment|budget/i.test(msg)) continue;
         throw e;
       }
     }
-    throw lastErr || new Error("Модели Gemini недоступны");
+    throw lastErr || new Error("Бесплатная модель сейчас недоступна. Попробуй OpenRouter.");
   },
 
-  async requestGemini(key, model, system, contents) {
-    const url =
-      "https://generativelanguage.googleapis.com/v1beta/models/" +
-      encodeURIComponent(model) +
-      ":generateContent?key=" +
-      encodeURIComponent(key);
-
-    const res = await fetch(url, {
+  async requestFree(model, messages) {
+    // Без Authorization — иначе Pollinations думает, что ключ есть и требует бюджет
+    const res = await fetch(this.FREE.endpoint, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Referer: location.href || "https://yanmag933.github.io/bigbossyan/",
+      },
       body: JSON.stringify({
-        systemInstruction: { parts: [{ text: system }] },
-        contents,
-        generationConfig: {
-          temperature: 0.55,
-          maxOutputTokens: 1400,
-          responseMimeType: "application/json",
-        },
+        model,
+        messages,
+        temperature: 0.55,
       }),
     });
 
@@ -239,13 +227,11 @@ ${JSON.stringify(
       let parsed = detail;
       try {
         const j = JSON.parse(detail);
-        parsed = (j.error && j.error.message) || detail;
+        parsed =
+          (j.error && (j.error.message || j.error)) ||
+          (j.details && j.details.error && j.details.error.message) ||
+          detail;
       } catch (_) {}
-      if (/location is not supported/i.test(String(parsed))) {
-        throw new Error(
-          "Gemini из твоего региона закрыт (location). Переключи провайдер на OpenRouter и вставь ключ оттуда."
-        );
-      }
       throw new Error(String(parsed).slice(0, 220));
     }
 
@@ -253,16 +239,18 @@ ${JSON.stringify(
     try {
       data = JSON.parse(detail);
     } catch (_) {
-      throw new Error("Кривой ответ Gemini");
+      // иногда приходит plain text
+      if (detail && detail.trim()) return detail.trim();
+      throw new Error("Кривой ответ бесплатной модели");
     }
+
+    if (typeof data === "string") return data;
     const content =
-      data &&
-      data.candidates &&
-      data.candidates[0] &&
-      data.candidates[0].content &&
-      data.candidates[0].content.parts &&
-      data.candidates[0].content.parts.map((p) => p.text || "").join("");
-    if (!content) throw new Error("Пустой ответ Gemini");
+      (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) ||
+      data.content ||
+      data.text ||
+      data.reply;
+    if (!content) throw new Error("Пустой ответ бесплатной модели");
     return content;
   },
 

@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const VER = "6";
+  const VER = "7";
   let state = Store.load();
   let deferredPrompt = null;
   let chatBusy = false;
@@ -353,37 +353,37 @@
     const p = project();
     const msgs = (state.chat[p.id] || []).slice(-40);
     const provider = BossChat.provider(state);
+    const isFree = provider === "free";
     const hasKey = BossChat.hasKey(state);
-    const isGemini = provider === "gemini";
-    const keyValue = isGemini
-      ? (state.ai && state.ai.geminiKey) || ""
-      : (state.ai && (state.ai.apiKey || state.ai.openrouterKey)) || "";
+    const keyValue = (state.ai && (state.ai.apiKey || state.ai.openrouterKey)) || "";
     return `
       ${projectSwitchHtml()}
       <div class="hero-block">
         <h2 style="font-size:clamp(22px,6.5vw,30px)">Чат босса</h2>
-        <p>Два канала: OpenRouter (обычно ок из РФ) или прямой Gemini.</p>
+        <p>OpenRouter по ключу или бесплатный канал без регистрации.</p>
       </div>
 
       <div class="panel">
-        <div class="tiny muted" style="margin-bottom:8px">Провайдер</div>
+        <div class="tiny muted" style="margin-bottom:8px">ИИ</div>
         <div class="seg" id="ai-provider">
-          <button type="button" class="seg-btn ${!isGemini ? "active" : ""}" data-ai-provider="openrouter">OpenRouter</button>
-          <button type="button" class="seg-btn ${isGemini ? "active" : ""}" data-ai-provider="gemini">Gemini</button>
+          <button type="button" class="seg-btn ${!isFree ? "active" : ""}" data-ai-provider="openrouter">OpenRouter</button>
+          <button type="button" class="seg-btn ${isFree ? "active" : ""}" data-ai-provider="free">Бесплатный</button>
         </div>
-        <label class="field" style="margin-top:12px">${isGemini ? "Ключ Gemini" : "Ключ OpenRouter"}
-          <input type="password" id="ai-key" value="${esc(keyValue)}" placeholder="${isGemini ? "AIza…" : "sk-or-…"}" autocomplete="off" />
+        ${
+          isFree
+            ? `<p class="small muted" style="margin:12px 0 0;line-height:1.45">Ключ не нужен — пиши сразу. Может быть медленнее и с лимитом.</p>`
+            : `<label class="field" style="margin-top:12px">Ключ OpenRouter
+          <input type="password" id="ai-key" value="${esc(keyValue)}" placeholder="sk-or-…" autocomplete="off" />
         </label>
         <button type="button" class="btn secondary block" id="save-ai-key" style="margin-top:10px">Сохранить ключ</button>
         <p class="small muted" style="margin:10px 0 0;line-height:1.45">
           ${
             hasKey
-              ? "Ключ сохранён для " + (isGemini ? "Gemini" : "OpenRouter") + ". Модель видит прайс, прогресс и историю."
-              : isGemini
-                ? "Ключ: aistudio.google.com/apikey — если ошибка location, переключись на OpenRouter."
-                : "Ключ: openrouter.ai/keys → Create key. Бесплатные модели с :free."
+              ? "Ключ сохранён. Модель видит прайс, прогресс и историю."
+              : "Ключ: openrouter.ai/keys → Create key. Или переключись на «Бесплатный»."
           }
-        </p>
+        </p>`
+        }
       </div>
 
       <div class="chat-box panel" id="chat-box">
@@ -401,14 +401,14 @@
             : `<div class="empty">${
                 hasKey
                   ? "Спроси по делу: «предложи 3 варианта цены Стандарт и почему» — план сам не тронет, пока не скажешь «примени…»."
-                  : "Сохрани ключ выбранного провайдера — потом пиши вопросы."
+                  : "Сохрани ключ OpenRouter или включи «Бесплатный»."
               }</div>`
         }
         ${chatBusy ? '<div class="bubble bot"><div class="bubble-text">Думаю над ответом…</div></div>' : ""}
       </div>
 
       <form class="chat-form" id="chat-form">
-        <input type="text" id="chat-input" maxlength="1200" placeholder="${hasKey ? "Сообщение…" : "Сначала сохрани ключ"}" autocomplete="off" ${chatBusy || !hasKey ? "disabled" : ""} />
+        <input type="text" id="chat-input" maxlength="1200" placeholder="${hasKey ? "Сообщение…" : "Сначала ключ или «Бесплатный»"}" autocomplete="off" ${chatBusy || !hasKey ? "disabled" : ""} />
         <button type="submit" class="btn" ${chatBusy || !hasKey ? "disabled" : ""}>→</button>
       </form>
 
@@ -581,7 +581,7 @@
 
     app.querySelectorAll("[data-ai-provider]").forEach((btn) => {
       btn.addEventListener("click", () => {
-        state.ai.provider = btn.dataset.aiProvider === "gemini" ? "gemini" : "openrouter";
+        state.ai.provider = btn.dataset.aiProvider === "openrouter" ? "openrouter" : "free";
         save();
         render();
       });
@@ -590,9 +590,7 @@
     const aiKey = document.getElementById("ai-key");
     if (aiKey) {
       aiKey.addEventListener("change", () => {
-        const val = aiKey.value.trim();
-        if (BossChat.provider(state) === "gemini") state.ai.geminiKey = val;
-        else state.ai.apiKey = val;
+        state.ai.apiKey = aiKey.value.trim();
         save();
       });
     }
@@ -601,14 +599,9 @@
     if (saveAiKey) {
       saveAiKey.addEventListener("click", () => {
         const input = document.getElementById("ai-key");
-        const val = (input && input.value ? input.value : "").trim();
-        if (BossChat.provider(state) === "gemini") {
-          state.ai.geminiKey = val;
-          state.ai.geminiModel = "gemini-2.5-flash";
-        } else {
-          state.ai.apiKey = val;
-          state.ai.openrouterModel = "deepseek/deepseek-chat-v3-0324:free";
-        }
+        state.ai.apiKey = (input && input.value ? input.value : "").trim();
+        state.ai.openrouterModel = "deepseek/deepseek-chat-v3-0324:free";
+        state.ai.provider = "openrouter";
         save();
         render();
       });
