@@ -59,17 +59,17 @@ window.Store = {
     });
     if (state.tab === "boss") state.tab = "chat";
     if (state.ai) {
-      if (state.ai.geminiKey && !state.ai.apiKey) {
-        // Не переносим AIza-ключ в OpenRouter — из РФ он падает с location
-        delete state.ai.geminiKey;
+      if (!state.ai.provider) state.ai.provider = "openrouter";
+      if (!state.ai.openrouterModel) {
+        state.ai.openrouterModel =
+          state.ai.model && !/^gemini/i.test(String(state.ai.model))
+            ? state.ai.model
+            : "deepseek/deepseek-chat-v3-0324:free";
       }
-      if (
-        !state.ai.model ||
-        /gemini-2\.0-flash|gemini-1\.5-flash|gemini-3\.6-flash|deepseek-chat-v3\.1/i.test(
-          String(state.ai.model)
-        )
-      ) {
-        state.ai.model = "deepseek/deepseek-chat-v3-0324:free";
+      if (!state.ai.geminiModel) state.ai.geminiModel = "gemini-2.5-flash";
+      if (state.ai.apiKey && /^AIza/i.test(state.ai.apiKey) && !state.ai.geminiKey) {
+        state.ai.geminiKey = state.ai.apiKey;
+        state.ai.apiKey = "";
       }
     }
   },
@@ -84,7 +84,13 @@ window.Store = {
       wins: [],
       installDismissed: false,
       chat: { lifeRpg: [], trailOn: [] },
-      ai: { apiKey: "", model: "deepseek/deepseek-chat-v3-0324:free" },
+      ai: {
+        provider: "openrouter",
+        apiKey: "",
+        geminiKey: "",
+        openrouterModel: "deepseek/deepseek-chat-v3-0324:free",
+        geminiModel: "gemini-2.5-flash",
+      },
       docs: { audience: "investor", lastFile: null },
     };
   },

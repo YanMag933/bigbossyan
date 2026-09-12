@@ -1,18 +1,31 @@
 window.BossChat = {
   MIN_PRICE: 500,
-  /** OpenRouter — работает из РФ; прямой Gemini AI Studio часто режется по локации */
-  ENDPOINT: "https://openrouter.ai/api/v1/chat/completions",
-  MODEL: "deepseek/deepseek-chat-v3-0324:free",
-  FALLBACK_MODELS: [
-    "deepseek/deepseek-r1-0528:free",
-    "meta-llama/llama-3.3-70b-instruct:free",
-    "nvidia/nemotron-nano-9b-v2:free",
-  ],
+
+  OPENROUTER: {
+    endpoint: "https://openrouter.ai/api/v1/chat/completions",
+    model: "deepseek/deepseek-chat-v3-0324:free",
+    fallbacks: [
+      "deepseek/deepseek-r1-0528:free",
+      "meta-llama/llama-3.3-70b-instruct:free",
+      "nvidia/nemotron-nano-9b-v2:free",
+    ],
+  },
+
+  GEMINI: {
+    models: ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-3.6-flash"],
+  },
+
+  provider(state) {
+    const p = String((state && state.ai && state.ai.provider) || "openrouter").toLowerCase();
+    return p === "gemini" ? "gemini" : "openrouter";
+  },
 
   getKey(state) {
     if (!state || !state.ai) return "";
+    if (this.provider(state) === "gemini") {
+      return String(state.ai.geminiKey || "").trim();
+    }
     const key = String(state.ai.apiKey || state.ai.openrouterKey || "").trim();
-    // Старый ключ Gemini (AIza…) из РФ здесь не подходит
     if (!key || /^AIza/i.test(key)) return "";
     return key;
   },
@@ -22,20 +35,22 @@ window.BossChat = {
   },
 
   async ask(message, projectId, state) {
+    const provider = this.provider(state);
     if (!this.hasKey(state)) {
       return {
         reply:
-          "Прямой Gemini из РФ часто не пускает (ошибка location). Поэтому чат идёт через OpenRouter — модель думает на их сервере.\n\n" +
-          "1) Зайди на https://openrouter.ai/keys\n" +
-          "2) Create key (можно с бесплатными моделями)\n" +
-          "3) Вставь ключ выше → «Сохранить»\n\n" +
-          "Ключ хранится только на этом устройстве.",
+          provider === "gemini"
+            ? "Нет ключа Gemini.\n\n1) aistudio.google.com/apikey\n2) Create API key\n3) Вставь выше → «Сохранить»\n\nИз РФ Google иногда режет по локации — тогда переключись на OpenRouter."
+            : "Нет ключа OpenRouter.\n\n1) openrouter.ai/keys\n2) Create key\n3) Вставь выше → «Сохранить»\n\nКлюч только на этом устройстве. Если удобнее Gemini — переключи провайдер выше.",
         patches: [],
       };
     }
 
     const history = (state.chat[projectId] || []).slice(-12);
-    const raw = await this.callOpenRouter(message, projectId, state, history);
+    const raw =
+      provider === "gemini"
+        ? await this.callGemini(message, projectId, state, history)
+        : await this.callOpenRouter(message, projectId, state, history);
     const parsed = this.parseModelJson(raw);
     parsed.patches = this.sanitizePatches(parsed.patches || [], projectId, message);
     return parsed;
@@ -54,16 +69,16 @@ ${JSON.stringify(ctx, null, 2)}
 
 Кратко второй проект (для сравнения, если уместно):
 ${JSON.stringify(
-      {
-        projectId: other.projectId,
-        name: other.name,
-        progressPct: other.progressPct,
-        pricing: other.pricing,
-        stage: other.stage,
-      },
-      null,
-      2
-    )}
+  {
+    projectId: other.projectId,
+    name: other.name,
+    progressPct: other.progressPct,
+    pricing: other.pricing,
+    stage: other.stage,
+  },
+  null,
+  2
+)}
 
 Как думать:
 - Прочитай вопрос буквально. «Предложи 3 варианта цены» = совет и сравнение, НЕ смена цены в плане.
@@ -106,18 +121,18 @@ ${JSON.stringify(
 
   async callOpenRouter(message, projectId, state, history) {
     const key = this.getKey(state);
-    const preferred = String((state.ai && state.ai.model) || this.MODEL).trim() || this.MODEL;
-    const models = [preferred].concat(this.FALLBACK_MODELS.filter((m) => m !== preferred));
+    const preferred =
+      String((state.ai && state.ai.openrouterModel) || this.OPENROUTER.model).trim() || this.OPENROUTER.model;
+    const models = [preferred].concat(this.OPENROUTER.fallbacks.filter((m) => m !== preferred));
     const messages = this.buildMessages(message, projectId, state, history);
 
     let lastErr = null;
     for (const model of models) {
       try {
-        return await this.requestModel(key, model, messages);
+        return await this.requestOpenRouter(key, model, messages);
       } catch (e) {
         lastErr = e;
         const msg = String(e.message || e);
-        // пробуем другую бесплатную модель, если эта кончилась / недоступна
         if (/404|rate|429|capacity|no longer|not found|insufficient/i.test(msg)) continue;
         throw e;
       }
@@ -125,8 +140,8 @@ ${JSON.stringify(
     throw lastErr || new Error("Все модели OpenRouter недоступны сейчас");
   },
 
-  async requestModel(key, model, messages) {
-    const res = await fetch(this.ENDPOINT, {
+  async requestOpenRouter(key, model, messages) {
+    const res = await fetch(this.OPENROUTER.endpoint, {
       method: "POST",
       headers: {
         Authorization: "Bearer " + key,
@@ -149,11 +164,6 @@ ${JSON.stringify(
         const j = JSON.parse(detail);
         parsed = (j.error && (j.error.message || j.error)) || detail;
       } catch (_) {}
-      if (/location is not supported/i.test(String(parsed))) {
-        throw new Error(
-          "Прямой Google из твоего региона закрыт. Нужен ключ OpenRouter (openrouter.ai/keys), не Gemini AI Studio."
-        );
-      }
       throw new Error(String(parsed).slice(0, 220));
     }
 
@@ -170,6 +180,89 @@ ${JSON.stringify(
       data.choices[0].message &&
       data.choices[0].message.content;
     if (!content) throw new Error("Пустой ответ модели");
+    return content;
+  },
+
+  async callGemini(message, projectId, state, history) {
+    const key = this.getKey(state);
+    const preferred = String((state.ai && state.ai.geminiModel) || this.GEMINI.models[0]).trim();
+    const models = [preferred].concat(this.GEMINI.models.filter((m) => m !== preferred));
+    const system = this.buildSystemPrompt(projectId, state);
+    const contents = [];
+    for (const m of history) {
+      if (!m || !m.text) continue;
+      if (m.role === "user") contents.push({ role: "user", parts: [{ text: m.text }] });
+      else if (m.role === "assistant") contents.push({ role: "model", parts: [{ text: m.text }] });
+    }
+    const last = contents[contents.length - 1];
+    if (!last || last.role !== "user" || last.parts[0].text !== message) {
+      contents.push({ role: "user", parts: [{ text: message }] });
+    }
+
+    let lastErr = null;
+    for (const model of models) {
+      try {
+        return await this.requestGemini(key, model, system, contents);
+      } catch (e) {
+        lastErr = e;
+        const msg = String(e.message || e);
+        if (/404|not found|NOT_FOUND|is not found/i.test(msg)) continue;
+        throw e;
+      }
+    }
+    throw lastErr || new Error("Модели Gemini недоступны");
+  },
+
+  async requestGemini(key, model, system, contents) {
+    const url =
+      "https://generativelanguage.googleapis.com/v1beta/models/" +
+      encodeURIComponent(model) +
+      ":generateContent?key=" +
+      encodeURIComponent(key);
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: system }] },
+        contents,
+        generationConfig: {
+          temperature: 0.55,
+          maxOutputTokens: 1400,
+          responseMimeType: "application/json",
+        },
+      }),
+    });
+
+    const detail = await res.text();
+    if (!res.ok) {
+      let parsed = detail;
+      try {
+        const j = JSON.parse(detail);
+        parsed = (j.error && j.error.message) || detail;
+      } catch (_) {}
+      if (/location is not supported/i.test(String(parsed))) {
+        throw new Error(
+          "Gemini из твоего региона закрыт (location). Переключи провайдер на OpenRouter и вставь ключ оттуда."
+        );
+      }
+      throw new Error(String(parsed).slice(0, 220));
+    }
+
+    let data;
+    try {
+      data = JSON.parse(detail);
+    } catch (_) {
+      throw new Error("Кривой ответ Gemini");
+    }
+    const content =
+      data &&
+      data.candidates &&
+      data.candidates[0] &&
+      data.candidates[0].content &&
+      data.candidates[0].content.parts &&
+      data.candidates[0].content.parts.map((p) => p.text || "").join("");
+    if (!content) throw new Error("Пустой ответ Gemini");
     return content;
   },
 
