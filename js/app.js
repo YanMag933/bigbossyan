@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const VER = "4";
+  const VER = "5";
   let state = Store.load();
   let deferredPrompt = null;
   let chatBusy = false;
@@ -357,19 +357,19 @@
       ${projectSwitchHtml()}
       <div class="hero-block">
         <h2 style="font-size:clamp(22px,6.5vw,30px)">Чат босса</h2>
-        <p>Один ИИ на Gemini: думает по контексту проекта, а не по заготовкам.</p>
+        <p>Через OpenRouter — из РФ прямой Gemini часто блокируют по локации.</p>
       </div>
 
       <div class="panel">
-        <label class="field">Ключ Gemini (бесплатно в AI Studio)
-          <input type="password" id="gemini-key" value="${esc(state.ai.geminiKey || "")}" placeholder="AIza…" autocomplete="off" />
+        <label class="field">Ключ OpenRouter
+          <input type="password" id="ai-key" value="${esc((state.ai && (state.ai.apiKey || state.ai.openrouterKey)) || "")}" placeholder="sk-or-…" autocomplete="off" />
         </label>
-        <button type="button" class="btn secondary block" id="save-gemini" style="margin-top:10px">Сохранить ключ</button>
+        <button type="button" class="btn secondary block" id="save-ai-key" style="margin-top:10px">Сохранить ключ</button>
         <p class="small muted" style="margin:10px 0 0;line-height:1.45">
           ${
             hasKey
-              ? "Ключ сохранён на этом устройстве. Модель видит прайс, прогресс и историю чата."
-              : "Без ключа чат не запустится — иначе снова будет пустой автомат. Ключ: aistudio.google.com/apikey"
+              ? "Ключ сохранён. Модель видит прайс, прогресс и историю чата."
+              : "1) openrouter.ai/keys → Create key  2) вставь сюда. Бесплатные модели с суффиксом :free."
           }
         </p>
       </div>
@@ -389,14 +389,14 @@
             : `<div class="empty">${
                 hasKey
                   ? "Спроси по делу: «предложи 3 варианта цены Стандарт и почему» — план сам не тронет, пока не скажешь «примени…»."
-                  : "Сначала сохрани ключ Gemini — потом пиши вопросы."
+                  : "Сначала сохрани ключ OpenRouter — потом пиши вопросы."
               }</div>`
         }
         ${chatBusy ? '<div class="bubble bot"><div class="bubble-text">Думаю над ответом…</div></div>' : ""}
       </div>
 
       <form class="chat-form" id="chat-form">
-        <input type="text" id="chat-input" maxlength="1200" placeholder="${hasKey ? "Сообщение…" : "Сначала ключ Gemini"}" autocomplete="off" ${chatBusy || !hasKey ? "disabled" : ""} />
+        <input type="text" id="chat-input" maxlength="1200" placeholder="${hasKey ? "Сообщение…" : "Сначала ключ OpenRouter"}" autocomplete="off" ${chatBusy || !hasKey ? "disabled" : ""} />
         <button type="submit" class="btn" ${chatBusy || !hasKey ? "disabled" : ""}>→</button>
       </form>
 
@@ -575,20 +575,20 @@
       });
     });
 
-    const geminiKey = document.getElementById("gemini-key");
+    const geminiKey = document.getElementById("ai-key") || document.getElementById("gemini-key");
     if (geminiKey) {
       geminiKey.addEventListener("change", () => {
-        state.ai.geminiKey = geminiKey.value.trim();
+        state.ai.apiKey = geminiKey.value.trim();
         save();
       });
     }
 
-    const saveGemini = document.getElementById("save-gemini");
+    const saveGemini = document.getElementById("save-ai-key") || document.getElementById("save-gemini");
     if (saveGemini) {
       saveGemini.addEventListener("click", () => {
-        const input = document.getElementById("gemini-key");
-        state.ai.geminiKey = (input && input.value ? input.value : "").trim();
-        state.ai.model = "gemini-3.6-flash";
+        const input = document.getElementById("ai-key") || document.getElementById("gemini-key");
+        state.ai.apiKey = (input && input.value ? input.value : "").trim();
+        state.ai.model = "deepseek/deepseek-chat-v3-0324:free";
         save();
         render();
       });

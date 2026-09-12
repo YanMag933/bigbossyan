@@ -58,8 +58,19 @@ window.Store = {
       if (oldIds.includes(w.projectId)) w.projectId = "trailOn";
     });
     if (state.tab === "boss") state.tab = "chat";
-    if (state.ai && /gemini-2\.0-flash|gemini-1\.5-flash/i.test(String(state.ai.model || ""))) {
-      state.ai.model = "gemini-3.6-flash";
+    if (state.ai) {
+      if (state.ai.geminiKey && !state.ai.apiKey) {
+        // Не переносим AIza-ключ в OpenRouter — из РФ он падает с location
+        delete state.ai.geminiKey;
+      }
+      if (
+        !state.ai.model ||
+        /gemini-2\.0-flash|gemini-1\.5-flash|gemini-3\.6-flash|deepseek-chat-v3\.1/i.test(
+          String(state.ai.model)
+        )
+      ) {
+        state.ai.model = "deepseek/deepseek-chat-v3-0324:free";
+      }
     }
   },
 
@@ -73,7 +84,7 @@ window.Store = {
       wins: [],
       installDismissed: false,
       chat: { lifeRpg: [], trailOn: [] },
-      ai: { geminiKey: "", model: "gemini-3.6-flash" },
+      ai: { apiKey: "", model: "deepseek/deepseek-chat-v3-0324:free" },
       docs: { audience: "investor", lastFile: null },
     };
   },

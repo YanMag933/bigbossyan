@@ -1,26 +1,41 @@
 window.BossChat = {
   MIN_PRICE: 500,
-  MODEL: "gemini-3.6-flash",
+  /** OpenRouter — работает из РФ; прямой Gemini AI Studio часто режется по локации */
+  ENDPOINT: "https://openrouter.ai/api/v1/chat/completions",
+  MODEL: "deepseek/deepseek-chat-v3-0324:free",
+  FALLBACK_MODELS: [
+    "deepseek/deepseek-r1-0528:free",
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "nvidia/nemotron-nano-9b-v2:free",
+  ],
+
+  getKey(state) {
+    if (!state || !state.ai) return "";
+    const key = String(state.ai.apiKey || state.ai.openrouterKey || "").trim();
+    // Старый ключ Gemini (AIza…) из РФ здесь не подходит
+    if (!key || /^AIza/i.test(key)) return "";
+    return key;
+  },
 
   hasKey(state) {
-    return !!(state && state.ai && state.ai.geminiKey && state.ai.geminiKey.trim());
+    return !!this.getKey(state);
   },
 
   async ask(message, projectId, state) {
     if (!this.hasKey(state)) {
       return {
         reply:
-          "Чтобы чат реально думал, нужен бесплатный ключ Gemini — без него будет только автомат из заготовок, а это уже бесит.\n\n" +
-          "1) Открой https://aistudio.google.com/apikey\n" +
-          "2) Create API key\n" +
-          "3) Вставь ключ в поле выше и нажми «Сохранить»\n\n" +
-          "Ключ остаётся только на этом телефоне.",
+          "Прямой Gemini из РФ часто не пускает (ошибка location). Поэтому чат идёт через OpenRouter — модель думает на их сервере.\n\n" +
+          "1) Зайди на https://openrouter.ai/keys\n" +
+          "2) Create key (можно с бесплатными моделями)\n" +
+          "3) Вставь ключ выше → «Сохранить»\n\n" +
+          "Ключ хранится только на этом устройстве.",
         patches: [],
       };
     }
 
     const history = (state.chat[projectId] || []).slice(-12);
-    const raw = await this.callGemini(message, projectId, state, history);
+    const raw = await this.callOpenRouter(message, projectId, state, history);
     const parsed = this.parseModelJson(raw);
     parsed.patches = this.sanitizePatches(parsed.patches || [], projectId, message);
     return parsed;
@@ -55,21 +70,18 @@ ${JSON.stringify(
 - Число «3» в таком вопросе — количество вариантов, НЕ цена 3 ₽.
 - Цены пакетов — обычно тысячи рублей (Life RPG ~5–25 тыс., TrailOn подписка ~3–7 тыс./точка).
 - Опирайся на прайс, прогресс, SWOT и рекомендации из контекста. Не выдумывай выручку, которой нет.
-- Отвечай по-русски, спокойно и по делу: сначала вывод/разбор, потом конкретика. Без грубости и без канцелярита.
+- Отвечай по-русски, спокойно и по делу: сначала вывод/разбор, потом конкретика.
 - Не раздувай ответ водой, но и не отвечай одной резкой фразой.
 
 Правки плана (patches):
 - По умолчанию patches = [].
 - Патч ставь ТОЛЬКО если пользователь ЯВНО просит изменить данные в приложении
-  (слова вроде: измени, поставь, примени, зафиксируй, обнови в плане) И назвал пакет + цену.
+  (слова: измени, поставь, примени, зафиксируй, обнови в плане) И назвал пакет + цену.
 - Если сомневаешься — patches пустой, предложи формулировку для подтверждения.
 - Никогда не ставь цену ниже 500 ₽ для пакетов.
 
 Формат ответа — строго JSON без markdown:
-{
-  "reply": "текст человеку",
-  "patches": []
-}
+{"reply":"текст человеку","patches":[]}
 
 Допустимые patches:
 {"op":"setPrice","projectId":"lifeRpg|trailOn","package":"точное имя пакета из прайса","price":"12900 ₽"}
@@ -78,76 +90,87 @@ ${JSON.stringify(
 {"op":"addWin","projectId":"...","text":"..."}`;
   },
 
-  async callGemini(message, projectId, state, history) {
-    const key = state.ai.geminiKey.trim();
-    const model = (state.ai && state.ai.model && String(state.ai.model).trim()) || this.MODEL;
-    // старые сохранённые имена моделей подменяем на актуальную
-    const resolved =
-      /gemini-2\.0-flash|gemini-1\.5-flash|gemini-pro/i.test(model) ? this.MODEL : model;
-    const url =
-      "https://generativelanguage.googleapis.com/v1beta/models/" +
-      encodeURIComponent(resolved) +
-      ":generateContent?key=" +
-      encodeURIComponent(key);
-
-    const contents = [];
+  buildMessages(message, projectId, state, history) {
+    const messages = [{ role: "system", content: this.buildSystemPrompt(projectId, state) }];
     for (const m of history) {
       if (!m || !m.text) continue;
-      if (m.role === "user") {
-        contents.push({ role: "user", parts: [{ text: m.text }] });
-      } else if (m.role === "assistant") {
-        contents.push({ role: "model", parts: [{ text: m.text }] });
+      if (m.role === "user") messages.push({ role: "user", content: m.text });
+      else if (m.role === "assistant") messages.push({ role: "assistant", content: m.text });
+    }
+    const last = messages[messages.length - 1];
+    if (!last || last.role !== "user" || last.content !== message) {
+      messages.push({ role: "user", content: message });
+    }
+    return messages;
+  },
+
+  async callOpenRouter(message, projectId, state, history) {
+    const key = this.getKey(state);
+    const preferred = String((state.ai && state.ai.model) || this.MODEL).trim() || this.MODEL;
+    const models = [preferred].concat(this.FALLBACK_MODELS.filter((m) => m !== preferred));
+    const messages = this.buildMessages(message, projectId, state, history);
+
+    let lastErr = null;
+    for (const model of models) {
+      try {
+        return await this.requestModel(key, model, messages);
+      } catch (e) {
+        lastErr = e;
+        const msg = String(e.message || e);
+        // пробуем другую бесплатную модель, если эта кончилась / недоступна
+        if (/404|rate|429|capacity|no longer|not found|insufficient/i.test(msg)) continue;
+        throw e;
       }
     }
-    // текущее сообщение уже добавлено в history как user до вызова — не дублируем, если последнее оно
-    const last = contents[contents.length - 1];
-    if (!last || last.role !== "user" || last.parts[0].text !== message) {
-      contents.push({ role: "user", parts: [{ text: message }] });
-    }
+    throw lastErr || new Error("Все модели OpenRouter недоступны сейчас");
+  },
 
-    const body = {
-      systemInstruction: { parts: [{ text: this.buildSystemPrompt(projectId, state) }] },
-      contents,
-      generationConfig: {
-        temperature: 0.55,
-        topP: 0.9,
-        maxOutputTokens: 1200,
-        responseMimeType: "application/json",
-      },
-    };
-
-    const res = await fetch(url, {
+  async requestModel(key, model, messages) {
+    const res = await fetch(this.ENDPOINT, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      headers: {
+        Authorization: "Bearer " + key,
+        "Content-Type": "application/json",
+        "HTTP-Referer": location.origin || "https://yanmag933.github.io",
+        "X-Title": "BigBossYan",
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        temperature: 0.55,
+        max_tokens: 1400,
+      }),
     });
 
+    const detail = await res.text();
     if (!res.ok) {
-      let detail = "";
+      let parsed = detail;
       try {
-        detail = await res.text();
+        const j = JSON.parse(detail);
+        parsed = (j.error && (j.error.message || j.error)) || detail;
       } catch (_) {}
-      if (res.status === 400 || res.status === 403) {
+      if (/location is not supported/i.test(String(parsed))) {
         throw new Error(
-          "Ключ отклонён или модель недоступна. Проверь ключ в AI Studio и что нет жёстких ограничений. " +
-            String(detail).slice(0, 160)
+          "Прямой Google из твоего региона закрыт. Нужен ключ OpenRouter (openrouter.ai/keys), не Gemini AI Studio."
         );
       }
-      throw new Error("Gemini HTTP " + res.status + ": " + String(detail).slice(0, 180));
+      throw new Error(String(parsed).slice(0, 220));
     }
 
-    const data = await res.json();
-    const parts =
-      data &&
-      data.candidates &&
-      data.candidates[0] &&
-      data.candidates[0].content &&
-      data.candidates[0].content.parts;
-    if (!parts || !parts.length) {
-      const block = data && data.promptFeedback && data.promptFeedback.blockReason;
-      throw new Error(block ? "Запрос заблокирован: " + block : "Пустой ответ модели");
+    let data;
+    try {
+      data = JSON.parse(detail);
+    } catch (_) {
+      throw new Error("Кривой ответ OpenRouter");
     }
-    return parts.map((p) => p.text || "").join("");
+    const content =
+      data &&
+      data.choices &&
+      data.choices[0] &&
+      data.choices[0].message &&
+      data.choices[0].message.content;
+    if (!content) throw new Error("Пустой ответ модели");
+    return content;
   },
 
   parseModelJson(raw) {
@@ -161,7 +184,6 @@ ${JSON.stringify(
         patches: Array.isArray(obj.patches) ? obj.patches : [],
       };
     } catch (_) {
-      // если модель вернула текст — покажем его, без патчей
       return { reply: text || "Не разобрал ответ модели.", patches: [] };
     }
   },
@@ -180,7 +202,6 @@ ${JSON.stringify(
 
   sanitizePatches(patches, projectId, userMessage) {
     if (!Array.isArray(patches) || !patches.length) return [];
-    // без явной команды на изменение — ничего не пишем в план
     if (!this.wantsMutation(userMessage)) return [];
 
     const out = [];
