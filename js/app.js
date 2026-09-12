@@ -1,12 +1,9 @@
 (function () {
   "use strict";
 
-  const VER = "24";
+  const VER = "25";
   let state = Store.load();
-  // Тексты Word в базу для поиска (если ещё пусто — все 3 аудитории)
-  ["lifeRpg", "trailOn"].forEach((pid) => {
-    if (!Store.docsList(state, pid).length) BossDocs.seedArchive(state, pid);
-  });
+  BossDocs.syncAll(state);
   Store.save(state);
   let deferredPrompt = null;
   let chatBusy = false;
@@ -31,6 +28,7 @@
   }
 
   function save() {
+    BossDocs.syncAll(state);
     Store.save(state);
   }
 
@@ -524,7 +522,7 @@
           mode === "ai"
             ? `<p class="small" style="margin:0;line-height:1.45;color:var(--gold,#d4af37)">${esc(BossChat.modelLabel())}</p>
                <p class="small muted" style="margin:8px 0 0;line-height:1.45">Отвечает по данным Life RPG / TrailOn: план, цены, SWOT, рекомендации. Интернет и чужие сайты не открывает.</p>`
-            : `<p class="small muted" style="margin:0;line-height:1.45">Ищет по прайсу, плану, заметкам, SWOT и текстам Word из вкладки «Док». Правки — только после подтверждения.</p>`
+            : `<p class="small muted" style="margin:0;line-height:1.45">Ищет по прайсу, плану, заметкам, SWOT и актуальным текстам Word (обновляются сами при правках). Правки — только после подтверждения.</p>`
         }
       </div>
 
@@ -590,9 +588,7 @@
         <button type="button" class="btn block" id="doc-generate" ${docsBusy ? "disabled" : ""}>
           ${docsBusy ? "Собираю Word…" : "Сгенерировать .docx"}
         </button>
-        <button type="button" class="btn secondary block" id="doc-refresh-archive" style="margin-top:8px">
-          Обновить тексты в базе поиска (${archived.length})
-        </button>
+        <p class="small muted" style="margin:10px 0 0;line-height:1.4">Тексты в базе обновляются сами при любом изменении цен, плана, побед или заметок — тот же текст идёт в Word и в чат «Проект».</p>
         ${
           lastDoc
             ? `<div class="stack" style="margin-top:12px">
@@ -606,7 +602,7 @@
         }
       </div>
 
-      <div class="section-title">В базе для чата</div>
+      <div class="section-title">В базе для чата (${archived.length})</div>
       <div class="panel">
         ${
           archived.length
@@ -980,15 +976,6 @@
 
     const gen = document.getElementById("doc-generate");
     if (gen) gen.addEventListener("click", () => generateDoc());
-
-    const refreshArch = document.getElementById("doc-refresh-archive");
-    if (refreshArch) {
-      refreshArch.addEventListener("click", () => {
-        BossDocs.refreshArchive(state, state.activeProject);
-        save();
-        render();
-      });
-    }
 
     const dl = document.getElementById("doc-download");
     if (dl && lastDoc) {

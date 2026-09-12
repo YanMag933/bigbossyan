@@ -247,21 +247,45 @@ window.BossDocs = {
   },
 
   seedArchive(state, projectId) {
-    if (!state || !window.BossData.projects[projectId]) return;
+    this.syncArchive(state, projectId);
+  },
+
+  /** Пересобрать тексты Word из актуальных данных проекта (цены, прогресс, победы…). */
+  syncArchive(state, projectId) {
+    if (!state || !window.BossData.projects[projectId] || !window.Store) return 0;
+    let updated = 0;
     for (const audienceId of Object.keys(this.audiences)) {
       const spec = this.buildSections(projectId, audienceId, state);
+      const text = this.specToSearchText(spec);
+      const filename = spec.filename.replace(/\s+/g, "_");
+      const list = window.Store.ensureDocArchive(state, projectId);
+      const existing = list.find((d) => d.audience === audienceId);
+      if (existing && existing.text === text && existing.title === spec.title && existing.filename === filename) {
+        continue;
+      }
       window.Store.upsertDocArchive(state, projectId, {
         audience: audienceId,
         title: spec.title,
-        filename: spec.filename.replace(/\s+/g, "_"),
-        text: this.specToSearchText(spec),
+        filename,
+        text,
         at: Date.now(),
       });
+      updated += 1;
     }
+    return updated;
+  },
+
+  syncAll(state) {
+    if (!state) return 0;
+    let n = 0;
+    for (const pid of Object.keys(window.BossData.projects || {})) {
+      n += this.syncArchive(state, pid);
+    }
+    return n;
   },
 
   refreshArchive(state, projectId) {
-    this.seedArchive(state, projectId);
+    this.syncArchive(state, projectId);
   },
 
   downloadBlob(blob, filename) {

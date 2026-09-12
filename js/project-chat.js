@@ -15,6 +15,11 @@ window.BossProjectChat = {
     const text = String(message || "").trim();
     if (!text) return { reply: "Пустой запрос.", patches: null };
 
+    // Актуальные тексты Word перед поиском/правкой
+    if (window.BossDocs && typeof window.BossDocs.syncArchive === "function") {
+      window.BossDocs.syncArchive(state, projectId);
+    }
+
     const pending = this.findPending(state, projectId);
     if (pending) {
       if (this.CONFIRM_RE.test(text)) {

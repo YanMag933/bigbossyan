@@ -286,9 +286,9 @@ window.Store = {
   upsertDocArchive(state, projectId, entry) {
     const list = this.ensureDocArchive(state, projectId);
     const audience = entry.audience || "custom";
-    const idx = list.findIndex((d) => d.audience === audience && d.filename === entry.filename);
+    const idx = list.findIndex((d) => d.audience === audience);
     const row = {
-      id: entry.id || "doc-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      id: entry.id || (idx >= 0 ? list[idx].id : null) || "doc-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
       audience,
       title: String(entry.title || "Документ"),
       filename: String(entry.filename || "doc.docx"),
