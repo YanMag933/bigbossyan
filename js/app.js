@@ -1,8 +1,13 @@
 (function () {
   "use strict";
 
-  const VER = "23";
+  const VER = "24";
   let state = Store.load();
+  // Тексты Word в базу для поиска (если ещё пусто — все 3 аудитории)
+  ["lifeRpg", "trailOn"].forEach((pid) => {
+    if (!Store.docsList(state, pid).length) BossDocs.seedArchive(state, pid);
+  });
+  Store.save(state);
   let deferredPrompt = null;
   let chatBusy = false;
   let lastDoc = null;
@@ -203,7 +208,7 @@
       <div class="project-switch chat-mode-switch" role="tablist" aria-label="Режим чата">
         <button type="button" class="project-btn ${mode === "ai" ? "active" : ""}" data-chat-mode="ai">
           <strong>ИИ</strong>
-          <span>советы и идеи</span>
+          <span>вшитый советник</span>
         </button>
         <button type="button" class="project-btn ${mode === "project" ? "active" : ""}" data-chat-mode="project">
           <strong>Проект</strong>
@@ -500,8 +505,8 @@
         : Store.getChat(state, p.id).slice(-40);
     const empty =
       mode === "project"
-        ? "Спроси факты из проекта: «цены», «прогресс», «заметки». Или: «измени цену Стандарта на 10900»."
-        : "Спроси: «что делать в первую очередь?», про цены, воронку, план…";
+        ? "Спроси факты: «цены», «документ инвестор», «прогресс». Или: «измени цену Стандарта на 10900»."
+        : "Спроси: «что делать», «цены», «риски», «питч», «сценарии»…";
     return `
       ${projectSwitchHtml()}
       ${chatModeSwitchHtml()}
@@ -509,8 +514,8 @@
         <h2 style="font-size:clamp(22px,6.5vw,30px)">${mode === "project" ? "Чат проекта" : "Чат ИИ"}</h2>
         <p>${
           mode === "project"
-            ? "Поиск и правки внутри проекта — без ИИ, мгновенно, с подтверждением."
-            : "Бесплатный ИИ через Puter — поразмыслить, посоветовать, найти идею."
+            ? "Глубокий поиск по плану, заметкам и сохранённым Word — с подтверждением правок."
+            : "Вшитый советник внутри приложения. Без Puter, без регистрации на сторонних сайтах."
         }</p>
       </div>
 
@@ -518,8 +523,8 @@
         ${
           mode === "ai"
             ? `<p class="small" style="margin:0;line-height:1.45;color:var(--gold,#d4af37)">${esc(BossChat.modelLabel())}</p>
-               <p class="small muted" style="margin:8px 0 0;line-height:1.45">При первом сообщении может открыться окно входа Puter — войди бесплатно и повтори вопрос.</p>`
-            : `<p class="small muted" style="margin:0;line-height:1.45">Ищет по прайсу, плану, заметкам, SWOT. Правки сначала показывает — потом ждёт «да» или кнопку.</p>`
+               <p class="small muted" style="margin:8px 0 0;line-height:1.45">Отвечает по данным Life RPG / TrailOn: план, цены, SWOT, рекомендации. Интернет и чужие сайты не открывает.</p>`
+            : `<p class="small muted" style="margin:0;line-height:1.45">Ищет по прайсу, плану, заметкам, SWOT и текстам Word из вкладки «Док». Правки — только после подтверждения.</p>`
         }
       </div>
 
@@ -558,11 +563,12 @@
     const p = project();
     const aud = state.docs.audience || "investor";
     const list = Object.values(BossDocs.audiences);
+    const archived = Store.docsList(state, p.id);
     return `
       ${projectSwitchHtml()}
       <div class="hero-block">
         <h2 style="font-size:clamp(22px,6.5vw,30px)">Документ</h2>
-        <p>Word по актуальным ценам, прогрессу и победам. Три аудитории — три разных текста.</p>
+        <p>Word по актуальным ценам, прогрессу и победам. Текст сразу сохраняется в базу для чата «Проект».</p>
       </div>
 
       <div class="panel">
@@ -584,6 +590,9 @@
         <button type="button" class="btn block" id="doc-generate" ${docsBusy ? "disabled" : ""}>
           ${docsBusy ? "Собираю Word…" : "Сгенерировать .docx"}
         </button>
+        <button type="button" class="btn secondary block" id="doc-refresh-archive" style="margin-top:8px">
+          Обновить тексты в базе поиска (${archived.length})
+        </button>
         ${
           lastDoc
             ? `<div class="stack" style="margin-top:12px">
@@ -594,6 +603,18 @@
                 <p class="tiny muted" style="margin:0;line-height:1.4;text-transform:none;letter-spacing:0">На iPhone «Поделиться» откроет Telegram / Max / Files. Письмо — приложи файл вручную.</p>
               </div>`
             : ""
+        }
+      </div>
+
+      <div class="section-title">В базе для чата</div>
+      <div class="panel">
+        ${
+          archived.length
+            ? `<ul class="doc-preview">${archived
+                .slice(0, 12)
+                .map((d) => `<li>${esc(d.title)} <span class="muted">· ${esc(d.audience || "")}</span></li>`)
+                .join("")}</ul>`
+            : `<p class="small muted" style="margin:0">Пока пусто — нажми «Обновить тексты» или сгенерируй Word.</p>`
         }
       </div>
 
@@ -959,6 +980,15 @@
 
     const gen = document.getElementById("doc-generate");
     if (gen) gen.addEventListener("click", () => generateDoc());
+
+    const refreshArch = document.getElementById("doc-refresh-archive");
+    if (refreshArch) {
+      refreshArch.addEventListener("click", () => {
+        BossDocs.refreshArchive(state, state.activeProject);
+        save();
+        render();
+      });
+    }
 
     const dl = document.getElementById("doc-download");
     if (dl && lastDoc) {

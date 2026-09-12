@@ -18,6 +18,7 @@ window.Store = {
         overrides: { ...this.blank().overrides, ...(parsed.overrides || {}) },
         chat: { ...this.blank().chat, ...(parsed.chat || {}) },
         projectChat: { ...this.blank().projectChat, ...(parsed.projectChat || {}) },
+        docArchive: { ...this.blank().docArchive, ...(parsed.docArchive || {}) },
         ai: { ...this.blank().ai, ...(parsed.ai || {}) },
         docs: { ...this.blank().docs, ...(parsed.docs || {}) },
         ui: { ...this.blank().ui, ...(parsed.ui || {}) },
@@ -56,6 +57,7 @@ window.Store = {
     this.migrateBucket(state.overrides, oldIds, "trailOn");
     this.migrateBucket(state.chat, oldIds, "trailOn");
     this.migrateBucket(state.projectChat, oldIds, "trailOn");
+    this.migrateBucket(state.docArchive, oldIds, "trailOn");
 
     (state.wins || []).forEach((w) => {
       if (oldIds.includes(w.projectId)) w.projectId = "trailOn";
@@ -130,6 +132,11 @@ window.Store = {
     for (const pid of ["lifeRpg", "trailOn"]) {
       if (!Array.isArray(state.projectChat[pid])) state.projectChat[pid] = [];
     }
+
+    if (!state.docArchive || typeof state.docArchive !== "object") state.docArchive = {};
+    for (const pid of ["lifeRpg", "trailOn"]) {
+      if (!Array.isArray(state.docArchive[pid])) state.docArchive[pid] = [];
+    }
   },
 
   blank() {
@@ -146,6 +153,10 @@ window.Store = {
         trailOn: [],
       },
       projectChat: {
+        lifeRpg: [],
+        trailOn: [],
+      },
+      docArchive: {
         lifeRpg: [],
         trailOn: [],
       },
@@ -258,6 +269,36 @@ window.Store = {
   setProjectChat(state, projectId, messages) {
     if (!state.projectChat) state.projectChat = {};
     state.projectChat[projectId] = Array.isArray(messages) ? messages : [];
+  },
+
+  ensureDocArchive(state, projectId) {
+    if (!state.docArchive) state.docArchive = {};
+    if (!Array.isArray(state.docArchive[projectId])) state.docArchive[projectId] = [];
+    return state.docArchive[projectId];
+  },
+
+  docsList(state, projectId) {
+    return this.ensureDocArchive(state, projectId)
+      .slice()
+      .sort((a, b) => (b.at || 0) - (a.at || 0));
+  },
+
+  upsertDocArchive(state, projectId, entry) {
+    const list = this.ensureDocArchive(state, projectId);
+    const audience = entry.audience || "custom";
+    const idx = list.findIndex((d) => d.audience === audience && d.filename === entry.filename);
+    const row = {
+      id: entry.id || "doc-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      audience,
+      title: String(entry.title || "Документ"),
+      filename: String(entry.filename || "doc.docx"),
+      text: String(entry.text || "").slice(0, 20000),
+      at: entry.at || Date.now(),
+    };
+    if (idx >= 0) list[idx] = { ...list[idx], ...row, id: list[idx].id };
+    else list.unshift(row);
+    if (list.length > 24) state.docArchive[projectId] = list.slice(0, 24);
+    return row;
   },
 
   save(state) {

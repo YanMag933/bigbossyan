@@ -229,7 +229,39 @@ window.BossDocs = {
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>`
     );
     const blob = await zip.generateAsync({ type: "blob" });
-    return { blob, filename: spec.filename.replace(/\s+/g, "_"), title: spec.title };
+    const filename = spec.filename.replace(/\s+/g, "_");
+    if (state && window.Store) {
+      window.Store.upsertDocArchive(state, projectId, {
+        audience: audienceId,
+        title: spec.title,
+        filename,
+        text: this.specToSearchText(spec),
+        at: Date.now(),
+      });
+    }
+    return { blob, filename, title: spec.title, text: this.specToSearchText(spec), audience: audienceId };
+  },
+
+  specToSearchText(spec) {
+    return [spec.title || "", ...(spec.blocks || [])].filter(Boolean).join("\n");
+  },
+
+  seedArchive(state, projectId) {
+    if (!state || !window.BossData.projects[projectId]) return;
+    for (const audienceId of Object.keys(this.audiences)) {
+      const spec = this.buildSections(projectId, audienceId, state);
+      window.Store.upsertDocArchive(state, projectId, {
+        audience: audienceId,
+        title: spec.title,
+        filename: spec.filename.replace(/\s+/g, "_"),
+        text: this.specToSearchText(spec),
+        at: Date.now(),
+      });
+    }
+  },
+
+  refreshArchive(state, projectId) {
+    this.seedArchive(state, projectId);
   },
 
   downloadBlob(blob, filename) {

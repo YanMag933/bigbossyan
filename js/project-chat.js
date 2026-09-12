@@ -137,18 +137,43 @@ window.BossProjectChat = {
     const prog = window.Store.progress(projectId, state);
     push("progress", "Прогресс плана", `${prog.pct}% · ${prog.done}/${prog.total} задач`);
 
-    window.Store.nextTasks(projectId, state, 12).forEach((t) => {
-      push("task", `Задача · ${t.title}`, `Фаза: ${t.phaseTitle}`, { taskId: t.id });
+    const doneMap = (state.done && state.done[projectId]) || {};
+    (p.phases || []).forEach((phase) => {
+      (phase.tasks || []).forEach((t) => {
+        const done = !!doneMap[t.id];
+        push(
+          "task",
+          `Задача · ${t.title}`,
+          `${done ? "Сделано" : "Открыта"} · фаза: ${phase.title} · вес ${t.weight || 1}`,
+          { taskId: t.id, done }
+        );
+      });
     });
 
     (state.wins || [])
       .filter((w) => w.projectId === projectId)
-      .slice(0, 20)
+      .slice(0, 30)
       .forEach((w) => push("win", "Победа", w.text));
 
     window.Store.notesList(state, projectId)
-      .slice(0, 30)
+      .slice(0, 40)
       .forEach((n) => push("note", `Заметка · ${n.title}`, n.body, { noteId: n.id }));
+
+    window.Store.docsList(state, projectId).forEach((d) => {
+      const aud = d.audience || "doc";
+      const audTitle =
+        (window.BossDocs && window.BossDocs.audiences[aud] && window.BossDocs.audiences[aud].title) || aud;
+      push("doc", `Документ · ${d.title}`, d.text, { docId: d.id, audience: aud });
+      // куски абзацев — чтобы искать глубже внутри Word
+      String(d.text || "")
+        .split(/\n+/)
+        .map((line) => line.trim())
+        .filter((line) => line.length > 24)
+        .slice(0, 40)
+        .forEach((line, i) => {
+          push("doc", `Документ (${audTitle}) · фрагмент ${i + 1}`, line, { docId: d.id, audience: aud });
+        });
+    });
 
     return items;
   },
@@ -169,6 +194,7 @@ window.BossProjectChat = {
     if (/swot|силн|слаб|угроз|возможност/.test(t) && item.topic === "swot") b += 6;
     if (/рекоменд|совет/.test(t) && item.topic === "rec") b += 8;
     if (/стади|этап/.test(t) && item.topic === "stage") b += 8;
+    if (/документ|ворд|docx|меморандум|инвестор|команд|покупател|кп\b/.test(t) && item.topic === "doc") b += 12;
     if (/слоган|позиц|one.?liner|о\s+проекте/.test(t) && ["project", "tagline", "position", "oneLiner"].includes(item.topic))
       b += 6;
     return b;
@@ -188,15 +214,28 @@ window.BossProjectChat = {
     if (!scored.length) {
       return {
         reply:
-          "В проекте ничего близкого не нашёл.\nПопробуй: «цены», «прогресс», «следующие задачи», «заметки», «воронка».",
+          "В проекте и документах ничего близкого не нашёл.\nПопробуй: «цены», «прогресс», «документ инвестор», «заметки», «воронка».",
         patches: null,
       };
     }
 
-    const top = scored.slice(0, 6);
-    const lines = top.map((x) => `• ${x.item.title}\n  ${this.short(x.item.body, 220)}`);
+    // убираем дубли целых документов, если уже есть фрагменты
+    const seen = new Set();
+    const top = [];
+    for (const x of scored) {
+      const key = x.item.topic + "|" + x.item.title + "|" + String(x.item.body).slice(0, 80);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      top.push(x);
+      if (top.length >= 8) break;
+    }
+
+    const docCount = window.Store.docsList(state, projectId).length;
+    const lines = top.map((x) => `• ${x.item.title}\n  ${this.short(x.item.body, 280)}`);
     return {
-      reply: `Нашёл в «${window.ProjectLive.get(projectId, state).name}»:\n\n${lines.join("\n\n")}`,
+      reply: `Нашёл в «${window.ProjectLive.get(projectId, state).name}»${
+        docCount ? ` · документов в базе: ${docCount}` : ""
+      }:\n\n${lines.join("\n\n")}`,
       patches: null,
     };
   },
