@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const VER = "19";
+  const VER = "20";
   let state = Store.load();
   let deferredPrompt = null;
   let chatBusy = false;
@@ -451,12 +451,12 @@
       ${projectSwitchHtml()}
       <div class="hero-block">
         <h2 style="font-size:clamp(22px,6.5vw,30px)">Чат босса</h2>
-        <p>Бесплатный ИИ без ключей. Пиши вопрос — получишь совет по проекту.</p>
+        <p>Бесплатный ИИ через Puter — без своих ключей и без оплаты в приложении.</p>
       </div>
 
       <div class="panel">
         <p class="small" style="margin:0;line-height:1.45;color:var(--gold,#d4af37)">${esc(BossChat.modelLabel())}</p>
-        <p class="small muted" style="margin:8px 0 0;line-height:1.45">Если часто писать подряд — подожди несколько секунд между сообщениями.</p>
+        <p class="small muted" style="margin:8px 0 0;line-height:1.45">При первом сообщении может открыться окно входа Puter — войди бесплатно и повтори вопрос.</p>
       </div>
 
       <div class="section-title">Чат</div>

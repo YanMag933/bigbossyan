@@ -2,13 +2,9 @@ window.BossChat = {
   MIN_PRICE: 500,
 
   FREE: {
-    label: "Бесплатный ИИ",
-    // gen.pollinations.ai уже требует ключ; анонимно живёт text.pollinations.ai
-    getBases: ["https://text.pollinations.ai/"],
-    postEndpoints: ["https://text.pollinations.ai/openai"],
-    models: ["openai", "openai-large", "mistral"],
-    cooldownMs: 16000,
-    lastCallAt: 0,
+    label: "Puter AI · бесплатно",
+    models: ["gpt-5-nano", "gpt-4.1-nano", "claude-haiku-4.5", "gemini-2.5-flash"],
+    timeoutMs: 35000,
   },
 
   provider() {
@@ -30,7 +26,7 @@ window.BossChat = {
   async ask(message, projectId, state) {
     const history = Store.getChat(state, projectId).slice(-8);
     const userMsg = this.enrichUserMessage(message);
-    const raw = await this.callFree(userMsg, projectId, state, history);
+    const raw = await this.callPuter(userMsg, projectId, state, history);
     const parsed = this.parseModelJson(raw);
     parsed.patches = this.sanitizePatches(parsed.patches || [], projectId, message);
     return parsed;
@@ -58,166 +54,121 @@ window.BossChat = {
       stage: ctx.stage,
       progressPct: ctx.progressPct,
       pricing: ctx.pricing,
-      nextTasks: (ctx.nextTasks || []).slice(0, 3),
-      notes: (ctx.notes || []).slice(0, 3),
+      nextTasks: (ctx.nextTasks || []).slice(0, 4),
+      notes: (ctx.notes || []).slice(0, 4),
     };
     return (
-      "Ты бизнес-советник BigBossYan для Яна. Отвечай по-русски коротко и по делу. " +
-      "Контекст: " +
+      "Ты бизнес-советник BigBossYan для основателя Яна. Отвечай по-русски, коротко и по делу. " +
+      "Контекст проекта: " +
       JSON.stringify(slim) +
-      ' Ответ строго JSON: {"reply":"текст","patches":[]}. patches только если явно просят изменить план.'
-    ).slice(0, 1800);
+      ' Формат ответа — строго JSON без markdown: {"reply":"текст человеку","patches":[]}. ' +
+      "patches=[] по умолчанию; патч только если явно просят изменить план/цену."
+    );
   },
 
   buildMessages(message, projectId, state, history) {
     const messages = [{ role: "system", content: this.buildSystemPrompt(projectId, state) }];
-    for (const m of (history || []).slice(-4)) {
+    for (const m of (history || []).slice(-6)) {
       if (!m || !m.text) continue;
-      if (m.role === "user") messages.push({ role: "user", content: String(m.text).slice(0, 500) });
-      else if (m.role === "assistant") messages.push({ role: "assistant", content: String(m.text).slice(0, 700) });
+      if (m.role === "user") messages.push({ role: "user", content: String(m.text).slice(0, 800) });
+      else if (m.role === "assistant") messages.push({ role: "assistant", content: String(m.text).slice(0, 1200) });
     }
-    messages.push({ role: "user", content: String(message).slice(0, 900) });
+    messages.push({ role: "user", content: String(message).slice(0, 1200) });
     return messages;
   },
 
-  async fetchTimeout(url, options, ms) {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), ms || 45000);
-    try {
-      return await fetch(url, { ...options, signal: ctrl.signal });
-    } catch (e) {
-      if (e && e.name === "AbortError") {
-        throw new Error("Таймаут (" + Math.round((ms || 45000) / 1000) + "с). Повтори через пару секунд.");
-      }
-      throw e;
-    } finally {
-      clearTimeout(timer);
+  withTimeout(promise, ms) {
+    return new Promise((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error("Таймаут " + Math.round(ms / 1000) + "с")), ms);
+      promise.then(
+        (v) => {
+          clearTimeout(t);
+          resolve(v);
+        },
+        (e) => {
+          clearTimeout(t);
+          reject(e);
+        }
+      );
+    });
+  },
+
+  ensurePuter() {
+    if (typeof window.puter === "undefined" || !window.puter.ai || !window.puter.ai.chat) {
+      throw new Error(
+        "Puter AI не загрузился. Проверь интернет / блокировщик рекламы и обнови через reset.html"
+      );
     }
   },
 
-  async callFree(message, projectId, state, history) {
-    const wait = this.FREE.cooldownMs - (Date.now() - (this.FREE.lastCallAt || 0));
-    if (wait > 0) {
-      throw new Error("Подожди " + Math.ceil(wait / 1000) + " сек — бесплатный канал ограничивает частоту.");
+  extractPuterText(res) {
+    if (res == null) return "";
+    if (typeof res === "string") return res;
+    if (typeof res === "number" || typeof res === "boolean") return String(res);
+    if (res.message) {
+      if (typeof res.message === "string") return res.message;
+      if (typeof res.message.content === "string") return res.message.content;
+      if (Array.isArray(res.message.content)) {
+        return res.message.content
+          .map((p) => (typeof p === "string" ? p : p && (p.text || p.content) || ""))
+          .join("");
+      }
     }
+    if (typeof res.content === "string") return res.content;
+    if (typeof res.text === "string") return res.text;
+    if (typeof res.toString === "function") {
+      const s = res.toString();
+      if (s && s !== "[object Object]") return s;
+    }
+    try {
+      return JSON.stringify(res);
+    } catch (_) {
+      return "";
+    }
+  },
 
+  async callPuter(message, projectId, state, history) {
+    this.ensurePuter();
     const messages = this.buildMessages(message, projectId, state, history);
-    const errors = [];
-
-    try {
-      const out = await this.requestFreeGet(messages);
-      this.FREE.lastCallAt = Date.now();
-      return out;
-    } catch (e) {
-      errors.push(this.friendlyError(e));
-    }
-
-    for (const endpoint of this.FREE.postEndpoints) {
-      for (const model of this.FREE.models) {
-        try {
-          const out = await this.requestFreePost(endpoint, model, messages);
-          this.FREE.lastCallAt = Date.now();
-          return out;
-        } catch (e) {
-          errors.push(this.friendlyError(e));
-        }
-      }
-    }
-
-    throw new Error(
-      errors.filter(Boolean).slice(-2).join(" · ") ||
-        "Бесплатный ИИ сейчас недоступен. Подожди минуту и попробуй снова."
-    );
-  },
-
-  flattenPrompt(messages) {
-    const parts = [];
-    for (const m of messages || []) {
-      if (!m || !m.content) continue;
-      if (m.role === "system") parts.push("SYSTEM:\n" + m.content);
-      else if (m.role === "user") parts.push("USER:\n" + m.content);
-      else if (m.role === "assistant") parts.push("ASSISTANT:\n" + m.content);
-    }
-    parts.push('Ответь одним JSON: {"reply":"...","patches":[]}');
-    return parts.join("\n\n").slice(0, 3200);
-  },
-
-  async requestFreeGet(messages) {
-    const prompt = this.flattenPrompt(messages);
     let lastErr = null;
-    for (const base of this.FREE.getBases) {
-      for (const model of this.FREE.models) {
-        let url = base + encodeURIComponent(prompt);
-        // text.pollinations.ai принимает ?model=
-        url += (url.indexOf("?") >= 0 ? "&" : "?") + "model=" + encodeURIComponent(model);
-        try {
-          const res = await this.fetchTimeout(
-            url,
-            { method: "GET", headers: { Accept: "text/plain, application/json, */*" } },
-            50000
+
+    for (const model of this.FREE.models) {
+      try {
+        const res = await this.withTimeout(
+          window.puter.ai.chat(messages, { model, temperature: 0.55 }),
+          this.FREE.timeoutMs
+        );
+        const text = this.extractPuterText(res).trim();
+        if (!text) throw new Error("Пустой ответ Puter");
+        return text;
+      } catch (e) {
+        lastErr = e;
+        const msg = String((e && e.message) || e || "");
+        // auth / popup cancelled — сразу понятная ошибка
+        if (/auth|login|sign.?in|cancelled|denied|permission/i.test(msg)) {
+          throw new Error(
+            "Нужен бесплатный вход в Puter (откроется окно). Войди и отправь сообщение ещё раз."
           );
-          const text = await res.text();
-          if (!res.ok) throw new Error(String(text || res.status).slice(0, 200));
-          if (!text || !String(text).trim()) throw new Error("Пустой ответ");
-          return String(text).trim();
-        } catch (e) {
-          lastErr = e;
         }
+        continue;
       }
     }
-    throw lastErr || new Error("GET failed");
-  },
 
-  async requestFreePost(endpoint, model, messages) {
-    const res = await this.fetchTimeout(
-      endpoint,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({
-          model,
-          messages: messages.slice(-5),
-          temperature: 0.5,
-        }),
-      },
-      45000
-    );
-    const detail = await res.text();
-    if (!res.ok) {
-      let parsed = detail;
-      try {
-        const j = JSON.parse(detail);
-        parsed = (j.error && (j.error.message || j.error)) || detail;
-      } catch (_) {}
-      throw new Error(String(parsed).slice(0, 200));
-    }
-    try {
-      const data = JSON.parse(detail);
-      const content =
-        (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) ||
-        data.content ||
-        data.text;
-      if (!content) throw new Error("Пустой ответ");
-      return content;
-    } catch (e) {
-      if (detail && detail.trim()) return detail.trim();
-      throw e;
-    }
+    throw lastErr || new Error("Puter AI недоступен сейчас");
   },
 
   friendlyError(err) {
     const msg = String((err && err.message) || err || "");
-    if (/402|Payment Required|budget|pollen|Insufficient/i.test(msg)) {
-      return "Лимит бесплатного канала. Подожди 20–60 сек и напиши снова.";
-    }
+    if (/Puter AI не загрузился/i.test(msg)) return msg;
+    if (/вход в Puter|auth|login|sign.?in/i.test(msg)) return msg;
+    if (/Таймаут/i.test(msg)) return msg + ". Попробуй ещё раз — иногда Puter отвечает дольше.";
     if (/Load failed|Failed to fetch|NetworkError|network/i.test(msg)) {
-      return "Сеть оборвала запрос. Проверь интернет и повтори.";
+      return "Сеть оборвала запрос к Puter. Проверь интернет и повтори.";
     }
-    if (/Incorrect API key|InvalidApiKey|401|Unauthorized/i.test(msg)) {
-      return "Ключ не нужен для этого чата. Обнови приложение через reset и пиши снова.";
+    if (/402|Payment|quota|credit/i.test(msg)) {
+      return "Лимит бесплатного Puter на сейчас. Подожди немного или войди в аккаунт Puter.";
     }
-    if (/Таймаут|Подожди/i.test(msg)) return msg;
-    return msg.slice(0, 220);
+    return msg.slice(0, 260);
   },
 
   parseModelJson(raw) {
