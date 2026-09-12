@@ -1,6 +1,6 @@
 window.BossChat = {
   MIN_PRICE: 500,
-  MODEL: "gemini-2.0-flash",
+  MODEL: "gemini-3.6-flash",
 
   hasKey(state) {
     return !!(state && state.ai && state.ai.geminiKey && state.ai.geminiKey.trim());
@@ -80,10 +80,13 @@ ${JSON.stringify(
 
   async callGemini(message, projectId, state, history) {
     const key = state.ai.geminiKey.trim();
-    const model = (state.ai.model || this.MODEL).trim() || this.MODEL;
+    const model = (state.ai && state.ai.model && String(state.ai.model).trim()) || this.MODEL;
+    // старые сохранённые имена моделей подменяем на актуальную
+    const resolved =
+      /gemini-2\.0-flash|gemini-1\.5-flash|gemini-pro/i.test(model) ? this.MODEL : model;
     const url =
       "https://generativelanguage.googleapis.com/v1beta/models/" +
-      encodeURIComponent(model) +
+      encodeURIComponent(resolved) +
       ":generateContent?key=" +
       encodeURIComponent(key);
 

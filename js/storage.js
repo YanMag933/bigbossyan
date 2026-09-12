@@ -58,6 +58,9 @@ window.Store = {
       if (oldIds.includes(w.projectId)) w.projectId = "trailOn";
     });
     if (state.tab === "boss") state.tab = "chat";
+    if (state.ai && /gemini-2\.0-flash|gemini-1\.5-flash/i.test(String(state.ai.model || ""))) {
+      state.ai.model = "gemini-3.6-flash";
+    }
   },
 
   blank() {
@@ -70,7 +73,7 @@ window.Store = {
       wins: [],
       installDismissed: false,
       chat: { lifeRpg: [], trailOn: [] },
-      ai: { geminiKey: "", model: "gemini-2.0-flash" },
+      ai: { geminiKey: "", model: "gemini-3.6-flash" },
       docs: { audience: "investor", lastFile: null },
     };
   },

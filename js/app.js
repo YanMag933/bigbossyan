@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const VER = "3";
+  const VER = "4";
   let state = Store.load();
   let deferredPrompt = null;
   let chatBusy = false;
@@ -588,7 +588,7 @@
       saveGemini.addEventListener("click", () => {
         const input = document.getElementById("gemini-key");
         state.ai.geminiKey = (input && input.value ? input.value : "").trim();
-        state.ai.model = "gemini-2.0-flash";
+        state.ai.model = "gemini-3.6-flash";
         save();
         render();
       });
