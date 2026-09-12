@@ -147,6 +147,10 @@ button, input, select, textarea {
   border-radius: 16px;
 }
 
+.chat-mode-switch {
+  margin-top: -6px;
+}
+
 .project-btn {
   appearance: none;
   border: 0;
@@ -900,6 +904,23 @@ label.field {
   font-size: 11px;
   color: var(--gold-bright);
   line-height: 1.35;
+}
+
+.bubble-meta.muted {
+  color: var(--muted);
+}
+
+.bubble-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.bubble-actions .btn {
+  padding: 8px 12px;
+  font-size: 12px;
+  min-height: 0;
 }
 
 .chat-form {

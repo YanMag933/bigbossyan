@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const VER = "21";
+  const VER = "23";
   let state = Store.load();
   let deferredPrompt = null;
   let chatBusy = false;
@@ -193,6 +193,21 @@
         <button type="button" class="project-btn ${state.activeProject === "trailOn" ? "active" : ""}" data-project="trailOn">
           <strong>${esc(b.name)}</strong>
           <span>${esc(b.short)}</span>
+        </button>
+      </div>`;
+  }
+
+  function chatModeSwitchHtml() {
+    const mode = chatMode();
+    return `
+      <div class="project-switch chat-mode-switch" role="tablist" aria-label="Режим чата">
+        <button type="button" class="project-btn ${mode === "ai" ? "active" : ""}" data-chat-mode="ai">
+          <strong>ИИ</strong>
+          <span>советы и идеи</span>
+        </button>
+        <button type="button" class="project-btn ${mode === "project" ? "active" : ""}" data-chat-mode="project">
+          <strong>Проект</strong>
+          <span>поиск и правки</span>
         </button>
       </div>`;
   }
@@ -444,47 +459,96 @@
     `;
   }
 
+  function chatMode() {
+    return state.ui && state.ui.chatMode === "project" ? "project" : "ai";
+  }
+
+  function renderChatBubble(m, mode) {
+    const pending =
+      mode === "project" &&
+      m.role === "assistant" &&
+      m.pendingPatches &&
+      m.pendingPatches.length &&
+      !m.applied &&
+      !m.rejected;
+    return `
+      <div class="bubble ${m.role === "user" ? "me" : "bot"}">
+        <div class="bubble-text">${esc(m.text)}</div>
+        ${
+          m.applied && m.applied.length
+            ? `<div class="bubble-meta">Изменено: ${esc(m.applied.join("; "))}</div>`
+            : ""
+        }
+        ${m.rejected ? `<div class="bubble-meta muted">Правка отклонена</div>` : ""}
+        ${
+          pending
+            ? `<div class="bubble-actions">
+                <button type="button" class="btn" data-confirm-patch="${esc(String(m.at))}">Применить</button>
+                <button type="button" class="btn secondary" data-reject-patch="${esc(String(m.at))}">Отклонить</button>
+              </div>`
+            : ""
+        }
+      </div>`;
+  }
+
   function renderChat() {
     const p = project();
-    const msgs = Store.getChat(state, p.id).slice(-40);
+    const mode = chatMode();
+    const msgs =
+      mode === "project"
+        ? Store.getProjectChat(state, p.id).slice(-40)
+        : Store.getChat(state, p.id).slice(-40);
+    const empty =
+      mode === "project"
+        ? "Спроси факты из проекта: «цены», «прогресс», «заметки». Или: «измени цену Стандарта на 10900»."
+        : "Спроси: «что делать в первую очередь?», про цены, воронку, план…";
     return `
       ${projectSwitchHtml()}
+      ${chatModeSwitchHtml()}
       <div class="hero-block">
-        <h2 style="font-size:clamp(22px,6.5vw,30px)">Чат босса</h2>
-        <p>Бесплатный ИИ через Puter — без своих ключей и без оплаты в приложении.</p>
+        <h2 style="font-size:clamp(22px,6.5vw,30px)">${mode === "project" ? "Чат проекта" : "Чат ИИ"}</h2>
+        <p>${
+          mode === "project"
+            ? "Поиск и правки внутри проекта — без ИИ, мгновенно, с подтверждением."
+            : "Бесплатный ИИ через Puter — поразмыслить, посоветовать, найти идею."
+        }</p>
       </div>
 
       <div class="panel">
-        <p class="small" style="margin:0;line-height:1.45;color:var(--gold,#d4af37)">${esc(BossChat.modelLabel())}</p>
-        <p class="small muted" style="margin:8px 0 0;line-height:1.45">При первом сообщении может открыться окно входа Puter — войди бесплатно и повтори вопрос.</p>
+        ${
+          mode === "ai"
+            ? `<p class="small" style="margin:0;line-height:1.45;color:var(--gold,#d4af37)">${esc(BossChat.modelLabel())}</p>
+               <p class="small muted" style="margin:8px 0 0;line-height:1.45">При первом сообщении может открыться окно входа Puter — войди бесплатно и повтори вопрос.</p>`
+            : `<p class="small muted" style="margin:0;line-height:1.45">Ищет по прайсу, плану, заметкам, SWOT. Правки сначала показывает — потом ждёт «да» или кнопку.</p>`
+        }
       </div>
 
-      <div class="section-title">Чат</div>
+      <div class="section-title">Сообщения</div>
       <div class="chat-box panel" id="chat-box">
         ${
           msgs.length
-            ? msgs
-                .map(
-                  (m) => `
-          <div class="bubble ${m.role === "user" ? "me" : "bot"}">
-            <div class="bubble-text">${esc(m.text)}</div>
-            ${m.applied && m.applied.length ? `<div class="bubble-meta">Изменено в плане: ${esc(m.applied.join("; "))}</div>` : ""}
-          </div>`
-                )
-                .join("")
-            : '<div class="empty">Спроси: «что делать в первую очередь?», про цены, воронку, план…</div>'
+            ? msgs.map((m) => renderChatBubble(m, mode)).join("")
+            : `<div class="empty">${empty}</div>`
         }
-        ${chatBusy ? '<div class="bubble bot"><div class="bubble-text">Думаю над ответом…</div></div>' : ""}
+        ${
+          chatBusy
+            ? `<div class="bubble bot"><div class="bubble-text">${
+                mode === "project" ? "Смотрю в проект…" : "Думаю над ответом…"
+              }</div></div>`
+            : ""
+        }
       </div>
 
       <form class="chat-form" id="chat-form">
-        <input type="text" id="chat-input" maxlength="1200" placeholder="Сообщение…" autocomplete="off" ${chatBusy ? "disabled" : ""} />
+        <input type="text" id="chat-input" maxlength="1200" placeholder="${
+          mode === "project" ? "Поиск или правка…" : "Сообщение…"
+        }" autocomplete="off" ${chatBusy ? "disabled" : ""} />
         <button type="submit" class="btn" ${chatBusy ? "disabled" : ""}>→</button>
       </form>
 
       <div class="section-title">Сброс</div>
       <div class="panel">
-        <button type="button" class="btn secondary block" id="clear-chat">Очистить чат</button>
+        <button type="button" class="btn secondary block" id="clear-chat">Очистить этот чат</button>
         <button type="button" class="btn secondary block" id="reset-btn" style="margin-top:8px">Сбросить весь прогресс</button>
       </div>
     `;
@@ -567,7 +631,87 @@
     }
   }
 
-  async function sendChat(text) {
+  function resolvePendingByAt(thread, at) {
+    const key = String(at);
+    return thread.find(
+      (m) =>
+        m &&
+        m.role === "assistant" &&
+        String(m.at) === key &&
+        m.pendingPatches &&
+        m.pendingPatches.length &&
+        !m.applied &&
+        !m.rejected
+    );
+  }
+
+  function applyPendingMessage(msg) {
+    if (!msg || !msg.pendingPatches) return [];
+    const applied = ProjectLive.applyPatches(state, msg.pendingPatches);
+    msg.applied = applied;
+    msg.pendingPatches = null;
+    msg.text = (msg.text || "").replace(/\n\nПодтверди «да» или нажми «Применить»\./, "");
+    if (applied.length) msg.text = (msg.text ? msg.text + "\n\n" : "") + "Готово.";
+    return applied;
+  }
+
+  function rejectPendingMessage(msg) {
+    if (!msg) return;
+    msg.rejected = true;
+    msg.pendingPatches = null;
+  }
+
+  function sendProjectChat(text) {
+    const msg = (text || "").trim();
+    if (!msg || chatBusy) return;
+    const pid = state.activeProject;
+    const thread = Store.getProjectChat(state, pid);
+    thread.push({ role: "user", text: msg, at: Date.now() });
+
+    const result = BossProjectChat.ask(msg, pid, state);
+
+    if (result.confirmPendingId != null) {
+      const pending = resolvePendingByAt(thread, result.confirmPendingId);
+      const applied = applyPendingMessage(pending);
+      thread.push({
+        role: "assistant",
+        text: applied.length ? "Применил: " + applied.join("; ") : "Нечего применять.",
+        applied,
+        at: Date.now(),
+        via: "project",
+      });
+    } else if (result.rejectPendingId != null) {
+      rejectPendingMessage(resolvePendingByAt(thread, result.rejectPendingId));
+      thread.push({
+        role: "assistant",
+        text: result.reply || "Правка отклонена.",
+        rejected: true,
+        at: Date.now(),
+        via: "project",
+      });
+    } else if (result.needsConfirm && result.patches && result.patches.length) {
+      thread.push({
+        role: "assistant",
+        text: result.reply,
+        pendingPatches: result.patches,
+        at: Date.now(),
+        via: "project",
+      });
+    } else {
+      thread.push({
+        role: "assistant",
+        text: result.reply,
+        at: Date.now(),
+        via: "project",
+      });
+    }
+
+    if (thread.length > 60) Store.setProjectChat(state, pid, thread.slice(-60));
+    save();
+    render();
+  }
+
+  async function sendAiChat(text) {
     const msg = (text || "").trim();
     if (!msg || chatBusy) return;
     const pid = state.activeProject;
@@ -598,6 +742,11 @@
     chatBusy = false;
     save();
     render();
+  }
+
+  function sendChat(text) {
+    if (chatMode() === "project") sendProjectChat(text);
+    else sendAiChat(text);
   }
 
   async function generateDoc() {
@@ -740,7 +889,8 @@
     const clearChat = document.getElementById("clear-chat");
     if (clearChat) {
       clearChat.addEventListener("click", () => {
-        Store.setChat(state, state.activeProject, []);
+        if (chatMode() === "project") Store.setProjectChat(state, state.activeProject, []);
+        else Store.setChat(state, state.activeProject, []);
         save();
         render();
       });
@@ -754,6 +904,50 @@
         sendChat(input && input.value);
       });
     }
+
+    app.querySelectorAll("[data-chat-mode]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (!state.ui) state.ui = { notesMode: "closed", editingNoteId: null, chatMode: "ai" };
+        state.ui.chatMode = btn.dataset.chatMode === "project" ? "project" : "ai";
+        save();
+        render();
+      });
+    });
+
+    app.querySelectorAll("[data-confirm-patch]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const thread = Store.getProjectChat(state, state.activeProject);
+        const pending = resolvePendingByAt(thread, btn.dataset.confirmPatch);
+        const applied = applyPendingMessage(pending);
+        if (applied.length) {
+          thread.push({
+            role: "assistant",
+            text: "Применил: " + applied.join("; "),
+            applied,
+            at: Date.now(),
+            via: "project",
+          });
+        }
+        save();
+        render();
+      });
+    });
+
+    app.querySelectorAll("[data-reject-patch]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const thread = Store.getProjectChat(state, state.activeProject);
+        rejectPendingMessage(resolvePendingByAt(thread, btn.dataset.rejectPatch));
+        thread.push({
+          role: "assistant",
+          text: "Правка отклонена.",
+          rejected: true,
+          at: Date.now(),
+          via: "project",
+        });
+        save();
+        render();
+      });
+    });
 
     app.querySelectorAll("[data-audience]").forEach((btn) => {
       btn.addEventListener("click", () => {

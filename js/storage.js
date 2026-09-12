@@ -17,6 +17,7 @@ window.Store = {
         notes: { ...this.blank().notes, ...(parsed.notes || {}) },
         overrides: { ...this.blank().overrides, ...(parsed.overrides || {}) },
         chat: { ...this.blank().chat, ...(parsed.chat || {}) },
+        projectChat: { ...this.blank().projectChat, ...(parsed.projectChat || {}) },
         ai: { ...this.blank().ai, ...(parsed.ai || {}) },
         docs: { ...this.blank().docs, ...(parsed.docs || {}) },
         ui: { ...this.blank().ui, ...(parsed.ui || {}) },
@@ -54,6 +55,7 @@ window.Store = {
     this.migrateBucket(state.notes, oldIds, "trailOn");
     this.migrateBucket(state.overrides, oldIds, "trailOn");
     this.migrateBucket(state.chat, oldIds, "trailOn");
+    this.migrateBucket(state.projectChat, oldIds, "trailOn");
 
     (state.wins || []).forEach((w) => {
       if (oldIds.includes(w.projectId)) w.projectId = "trailOn";
@@ -117,10 +119,16 @@ window.Store = {
     }
 
     if (!state.ui || typeof state.ui !== "object") {
-      state.ui = { notesMode: "closed", editingNoteId: null };
+      state.ui = { notesMode: "closed", editingNoteId: null, chatMode: "ai" };
     } else {
       if (!state.ui.notesMode) state.ui.notesMode = "closed";
       if (state.ui.editingNoteId === undefined) state.ui.editingNoteId = null;
+      if (state.ui.chatMode !== "project") state.ui.chatMode = "ai";
+    }
+
+    if (!state.projectChat || typeof state.projectChat !== "object") state.projectChat = {};
+    for (const pid of ["lifeRpg", "trailOn"]) {
+      if (!Array.isArray(state.projectChat[pid])) state.projectChat[pid] = [];
     }
   },
 
@@ -137,6 +145,10 @@ window.Store = {
         lifeRpg: [],
         trailOn: [],
       },
+      projectChat: {
+        lifeRpg: [],
+        trailOn: [],
+      },
       ai: {
         provider: "free",
         apiKey: "",
@@ -145,7 +157,7 @@ window.Store = {
         keyStatus: "",
         showKeyEditor: false,
       },
-      ui: { notesMode: "closed", editingNoteId: null },
+      ui: { notesMode: "closed", editingNoteId: null, chatMode: "ai" },
       docs: { audience: "investor", lastFile: null },
     };
   },
@@ -231,6 +243,21 @@ window.Store = {
   setChat(state, projectId, messages) {
     if (!state.chat) state.chat = {};
     state.chat[projectId] = Array.isArray(messages) ? messages : [];
+  },
+
+  ensureProjectChat(state, projectId) {
+    if (!state.projectChat) state.projectChat = {};
+    if (!Array.isArray(state.projectChat[projectId])) state.projectChat[projectId] = [];
+    return state.projectChat[projectId];
+  },
+
+  getProjectChat(state, projectId) {
+    return this.ensureProjectChat(state, projectId);
+  },
+
+  setProjectChat(state, projectId, messages) {
+    if (!state.projectChat) state.projectChat = {};
+    state.projectChat[projectId] = Array.isArray(messages) ? messages : [];
   },
 
   save(state) {
