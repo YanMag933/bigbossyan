@@ -99,6 +99,10 @@ window.Store = {
         provider: "free",
         apiKey: "",
         openrouterModel: "openrouter/free",
+        keyOk: false,
+        keyFp: "",
+        keyStatus: "",
+        showKeyEditor: true,
       },
       docs: { audience: "investor", lastFile: null },
     };

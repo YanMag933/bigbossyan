@@ -1,10 +1,11 @@
 (function () {
   "use strict";
 
-  const VER = "11";
+  const VER = "13";
   let state = Store.load();
   let deferredPrompt = null;
   let chatBusy = false;
+  let keyCheckBusy = false;
   let lastDoc = null;
   let docsBusy = false;
 
@@ -357,6 +358,13 @@
     const hasKey = BossChat.hasKey(state);
     const keyValue = (state.ai && (state.ai.apiKey || state.ai.openrouterKey)) || "";
     const chatLabel = isFree ? "Бесплатный" : "OpenRouter";
+    const keyOk =
+      !isFree &&
+      !!keyValue &&
+      state.ai.keyOk === true &&
+      state.ai.keyFp === BossChat.keyFingerprint(keyValue);
+    const showKeyForm = isFree ? false : !keyOk || state.ai.showKeyEditor === true;
+    const keyStatus = state.ai.keyStatus || "";
     return `
       ${projectSwitchHtml()}
       <div class="hero-block">
@@ -373,18 +381,26 @@
         ${
           isFree
             ? `<p class="small muted" style="margin:12px 0 0;line-height:1.45">Чат «Бесплатный»: без ключа. История не смешивается с OpenRouter.</p>`
-            : `<label class="field" style="margin-top:12px">Ключ OpenRouter
-          <textarea id="ai-key" rows="3" placeholder="Вставь сюда sk-or-… (можно длинно)" autocomplete="off" spellcheck="false" style="resize:vertical;min-height:72px;font-family:ui-monospace,monospace;font-size:13px;line-height:1.35">${esc(keyValue)}</textarea>
+            : keyOk && !showKeyForm
+              ? `<div style="margin-top:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+                  <p class="small" style="margin:0;line-height:1.45;color:var(--gold,#d4af37)">Ключ OpenRouter работает</p>
+                  <button type="button" class="btn secondary" id="change-ai-key" style="width:auto;padding:8px 12px">Сменить</button>
+                </div>
+                <p class="small muted" style="margin:8px 0 0;line-height:1.4">${esc(state.ai.keyFp || "")}</p>`
+              : `<label class="field" style="margin-top:12px">Ключ OpenRouter
+          <textarea id="ai-key" rows="3" placeholder="Вставь сюда sk-or-… (можно длинно)" autocomplete="off" spellcheck="false" ${keyCheckBusy ? "disabled" : ""} style="resize:vertical;min-height:72px;font-family:ui-monospace,monospace;font-size:13px;line-height:1.35">${esc(keyValue)}</textarea>
         </label>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
-          <button type="button" class="btn secondary block" id="paste-ai-key">Вставить</button>
-          <button type="button" class="btn secondary block" id="save-ai-key">Сохранить</button>
+          <button type="button" class="btn secondary block" id="paste-ai-key" ${keyCheckBusy ? "disabled" : ""}>Вставить</button>
+          <button type="button" class="btn secondary block" id="save-ai-key" ${keyCheckBusy ? "disabled" : ""}>${keyCheckBusy ? "Проверяю…" : "Сохранить"}</button>
         </div>
         <p class="small muted" style="margin:10px 0 0;line-height:1.45">
           ${
-            hasKey
-              ? "Чат «OpenRouter»: ключ сохранён. История отдельно от бесплатного."
-              : "Нужен ключ openrouter.ai/keys — или переключись на чат «Бесплатный»."
+            keyCheckBusy
+              ? "Проверяю ключ на OpenRouter…"
+              : keyStatus
+                ? esc(keyStatus)
+                : "После сохранения сразу проверю ключ. Если ок — это окно скроется."
           }
         </p>`
         }
@@ -406,15 +422,15 @@
             : `<div class="empty">${
                 hasKey
                   ? "Пустой чат «" + chatLabel + "». Задай тот же вопрос в обоих чатах и сравни."
-                  : "Сохрани ключ или открой чат «Бесплатный»."
+                  : "Сохрани рабочий ключ или открой чат «Бесплатный»."
               }</div>`
         }
         ${chatBusy ? '<div class="bubble bot"><div class="bubble-text">Думаю над ответом…</div></div>' : ""}
       </div>
 
       <form class="chat-form" id="chat-form">
-        <input type="text" id="chat-input" maxlength="1200" placeholder="${hasKey ? "Сообщение…" : "Сначала ключ или «Бесплатный»"}" autocomplete="off" ${chatBusy || !hasKey ? "disabled" : ""} />
-        <button type="submit" class="btn" ${chatBusy || !hasKey ? "disabled" : ""}>→</button>
+        <input type="text" id="chat-input" maxlength="1200" placeholder="${hasKey ? "Сообщение…" : "Сначала рабочий ключ или «Бесплатный»"}" autocomplete="off" ${chatBusy || keyCheckBusy || !hasKey ? "disabled" : ""} />
+        <button type="submit" class="btn" ${chatBusy || keyCheckBusy || !hasKey ? "disabled" : ""}>→</button>
       </form>
 
       <div class="section-title">Сброс</div>
@@ -423,6 +439,43 @@
         <button type="button" class="btn secondary block" id="reset-btn" style="margin-top:8px">Сбросить весь прогресс</button>
       </div>
     `;
+  }
+
+  async function saveAndVerifyKey(rawKey) {
+    const key = String(rawKey || "").trim();
+    if (!key) {
+      state.ai.keyOk = false;
+      state.ai.keyFp = "";
+      state.ai.keyStatus = "Вставь ключ sk-or-…";
+      state.ai.showKeyEditor = true;
+      save();
+      render();
+      return;
+    }
+    keyCheckBusy = true;
+    state.ai.apiKey = key;
+    state.ai.provider = "openrouter";
+    state.ai.openrouterModel = "openrouter/free";
+    state.ai.keyOk = false;
+    state.ai.keyStatus = "Проверяю ключ…";
+    state.ai.showKeyEditor = true;
+    save();
+    render();
+    try {
+      const verified = await BossChat.verifyOpenRouterKey(key);
+      state.ai.keyOk = true;
+      state.ai.keyFp = verified.fingerprint;
+      state.ai.keyStatus = "";
+      state.ai.showKeyEditor = false;
+    } catch (e) {
+      state.ai.keyOk = false;
+      state.ai.keyFp = "";
+      state.ai.keyStatus = "Ключ не прошёл проверку: " + BossChat.friendlyError(e);
+      state.ai.showKeyEditor = true;
+    }
+    keyCheckBusy = false;
+    save();
+    render();
   }
 
   function renderDocs() {
@@ -531,7 +584,7 @@
     } catch (e) {
       thread.push({
         role: "assistant",
-        text: "Не получилось достучаться до модели: " + String(e.message || e),
+        text: "Не получилось достучаться до модели: " + BossChat.friendlyError(e),
         at: Date.now(),
         provider,
       });
@@ -598,8 +651,24 @@
     const aiKey = document.getElementById("ai-key");
     if (aiKey) {
       aiKey.addEventListener("change", () => {
-        state.ai.apiKey = aiKey.value.trim();
+        const val = aiKey.value.trim();
+        if (val !== state.ai.apiKey) {
+          state.ai.keyOk = false;
+          state.ai.keyFp = "";
+          state.ai.keyStatus = "";
+        }
+        state.ai.apiKey = val;
         save();
+      });
+    }
+
+    const changeAiKey = document.getElementById("change-ai-key");
+    if (changeAiKey) {
+      changeAiKey.addEventListener("click", () => {
+        state.ai.showKeyEditor = true;
+        state.ai.keyStatus = "";
+        save();
+        render();
       });
     }
 
@@ -614,12 +683,13 @@
             return;
           }
           if (input) input.value = text.trim();
-          state.ai.apiKey = text.trim();
-          state.ai.provider = "openrouter";
-          save();
-          render();
-        } catch (_) {
-          alert("Телефон не дал доступ к буферу. Вставь ключ вручную в поле (удерживай → Вставить) и жми «Сохранить».");
+          await saveAndVerifyKey(text.trim());
+        } catch (e) {
+          if (String(e && e.message || e).includes("Ключ")) {
+            // already handled in saveAndVerifyKey
+            return;
+          }
+          alert("Телефон не дал доступ к буферу. Вставь ключ вручную в поле и жми «Сохранить».");
           if (input) input.focus();
         }
       });
@@ -627,13 +697,9 @@
 
     const saveAiKey = document.getElementById("save-ai-key");
     if (saveAiKey) {
-      saveAiKey.addEventListener("click", () => {
+      saveAiKey.addEventListener("click", async () => {
         const input = document.getElementById("ai-key");
-        state.ai.apiKey = (input && input.value ? input.value : "").trim();
-        state.ai.openrouterModel = "openrouter/free";
-        state.ai.provider = "openrouter";
-        save();
-        render();
+        await saveAndVerifyKey(input && input.value ? input.value : "");
       });
     }
 

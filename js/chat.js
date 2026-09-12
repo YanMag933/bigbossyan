@@ -17,7 +17,8 @@ window.BossChat = {
 
   FREE: {
     endpoint: "https://text.pollinations.ai/openai",
-    models: ["openai-fast", "openai", "mistral", "gemini-fast"],
+    /** Анонимный Pollinations сейчас отдаёт только openai-fast (alias: openai) */
+    models: ["openai-fast", "openai"],
   },
 
   provider(state) {
@@ -37,7 +38,9 @@ window.BossChat = {
 
   hasKey(state) {
     if (this.provider(state) === "free") return true;
-    return !!this.getKey(state);
+    const key = this.getKey(state);
+    if (!key) return false;
+    return state.ai && state.ai.keyOk === true && state.ai.keyFp === this.keyFingerprint(key);
   },
 
   async ask(message, projectId, state) {
@@ -231,9 +234,10 @@ ${JSON.stringify(
     const messages = this.buildMessages(message, projectId, state, history);
     if (messages[0] && messages[0].role === "system") {
       const short = messages[0].content;
-      if (short.length > 6000) messages[0].content = short.slice(0, 6000) + "\n…";
+      // На телефоне большой system иногда рвёт анонимный канал (Load failed)
+      if (short.length > 3500) messages[0].content = short.slice(0, 3500) + "\n…";
     }
-    const hist = messages.filter((m) => m.role !== "system").slice(-8);
+    const hist = messages.filter((m) => m.role !== "system").slice(-6);
     const payloadMessages = [messages[0]].concat(hist);
 
     let lastErr = null;
@@ -245,7 +249,63 @@ ${JSON.stringify(
         continue;
       }
     }
-    throw lastErr || new Error("Бесплатная модель сейчас недоступна.");
+    throw new Error(this.friendlyError(lastErr || new Error("Бесплатная модель сейчас недоступна.")));
+  },
+
+  friendlyError(err) {
+    const msg = String((err && err.message) || err || "");
+    if (/Load failed|Failed to fetch|NetworkError|network/i.test(msg)) {
+      return "Сеть оборвала запрос (Load failed). Проверь интернет / VPN и попробуй ещё раз через несколько секунд.";
+    }
+    if (/Model not found|not found/i.test(msg)) {
+      return "Модель на бесплатном канале сменилась. Обнови через reset и попробуй снова.";
+    }
+    if (/Таймаут/i.test(msg)) {
+      return msg + " Повтори запрос чуть позже.";
+    }
+    if (/401|Unauthorized|invalid.*key|User not found/i.test(msg)) {
+      return "Ключ OpenRouter не принят. Создай новый на openrouter.ai/keys и сохрани снова.";
+    }
+    return msg.slice(0, 280);
+  },
+
+  keyFingerprint(key) {
+    const k = String(key || "").trim();
+    if (k.length < 12) return k;
+    return k.slice(0, 8) + "…" + k.slice(-4);
+  },
+
+  /** Быстрая проверка: ключ живой + модель отвечает */
+  async verifyOpenRouterKey(key) {
+    const clean = String(key || "").trim();
+    if (!clean || /^AIza/i.test(clean)) {
+      throw new Error("Нужен ключ OpenRouter вида sk-or-…");
+    }
+
+    const auth = await this.fetchTimeout(
+      "https://openrouter.ai/api/v1/auth/key",
+      {
+        method: "GET",
+        headers: { Authorization: "Bearer " + clean },
+      },
+      15000
+    );
+    const authText = await auth.text();
+    if (!auth.ok) {
+      let parsed = authText;
+      try {
+        const j = JSON.parse(authText);
+        parsed = (j.error && (j.error.message || j.error)) || authText;
+      } catch (_) {}
+      throw new Error(this.friendlyError(parsed));
+    }
+
+    // Мини-пинг модели — чтобы не было сюрприза уже в чате
+    await this.requestOpenRouter(clean, "openrouter/free", [
+      { role: "user", content: 'Ответь строго JSON: {"reply":"ок","patches":[]}' },
+    ]);
+
+    return { ok: true, fingerprint: this.keyFingerprint(clean) };
   },
 
   async requestFree(model, messages) {
