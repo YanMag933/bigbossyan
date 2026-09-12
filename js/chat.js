@@ -3,11 +3,14 @@ window.BossChat = {
 
   OPENROUTER: {
     endpoint: "https://openrouter.ai/api/v1/chat/completions",
-    model: "deepseek/deepseek-chat-v3-0324:free",
+    /** openrouter/free сам выбирает живую бесплатную модель */
+    model: "openrouter/free",
     fallbacks: [
-      "deepseek/deepseek-r1-0528:free",
-      "meta-llama/llama-3.3-70b-instruct:free",
-      "nvidia/nemotron-nano-9b-v2:free",
+      "google/gemma-4-31b-it:free",
+      "nvidia/nemotron-3.5-lightning:free",
+      "thinkingmachines/inkling:free",
+      "poolside/laguna-s-2.1:free",
+      "deepseek/deepseek-chat-v3-0324",
     ],
   },
 
@@ -133,7 +136,8 @@ ${JSON.stringify(
       } catch (e) {
         lastErr = e;
         const msg = String(e.message || e);
-        if (/404|rate|429|capacity|no longer|not found|insufficient/i.test(msg)) continue;
+        if (/404|rate|429|capacity|no longer|not found|insufficient|unavailable for free|Payment Required|402/i.test(msg))
+          continue;
         throw e;
       }
     }

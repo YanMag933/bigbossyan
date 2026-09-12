@@ -61,11 +61,8 @@ window.Store = {
     if (state.ai) {
       if (state.ai.provider === "gemini") state.ai.provider = "openrouter";
       if (!state.ai.provider || state.ai.provider === "pollinations") state.ai.provider = "free";
-      if (!state.ai.openrouterModel) {
-        state.ai.openrouterModel =
-          state.ai.model && !/^gemini/i.test(String(state.ai.model))
-            ? state.ai.model
-            : "deepseek/deepseek-chat-v3-0324:free";
+      if (!state.ai.openrouterModel || /:free$|deepseek-chat-v3/i.test(String(state.ai.openrouterModel))) {
+        state.ai.openrouterModel = "openrouter/free";
       }
       if (state.ai.apiKey && /^AIza/i.test(state.ai.apiKey)) {
         state.ai.apiKey = "";
@@ -86,7 +83,7 @@ window.Store = {
       ai: {
         provider: "free",
         apiKey: "",
-        openrouterModel: "deepseek/deepseek-chat-v3-0324:free",
+        openrouterModel: "openrouter/free",
       },
       docs: { audience: "investor", lastFile: null },
     };

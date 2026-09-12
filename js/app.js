@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const VER = "8";
+  const VER = "9";
   let state = Store.load();
   let deferredPrompt = null;
   let chatBusy = false;
@@ -625,7 +625,7 @@
       saveAiKey.addEventListener("click", () => {
         const input = document.getElementById("ai-key");
         state.ai.apiKey = (input && input.value ? input.value : "").trim();
-        state.ai.openrouterModel = "deepseek/deepseek-chat-v3-0324:free";
+        state.ai.openrouterModel = "openrouter/free";
         state.ai.provider = "openrouter";
         save();
         render();
