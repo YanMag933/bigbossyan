@@ -64,22 +64,19 @@ window.Store = {
     });
     if (state.tab === "boss") state.tab = "chat";
     if (state.ai) {
-      state.ai.provider = "openai";
-      // Старые ключи чужих провайдеров больше не нужны
+      state.ai.provider = "free";
       state.ai.qwenKey = "";
       state.ai.openrouterKey = "";
       state.ai.openrouterKeyLegacy = "";
+      state.ai.openaiKey = "";
+      state.ai.apiKey = "";
+      state.ai.keyOk = true;
+      state.ai.showKeyEditor = false;
       delete state.ai.qwenModel;
       delete state.ai.qwenEndpoint;
       delete state.ai.openrouterModel;
-      // openaiKey сохраняем; apiKey → openaiKey один раз
-      if (!state.ai.openaiKey && state.ai.apiKey && /^sk-/.test(String(state.ai.apiKey))) {
-        state.ai.openaiKey = state.ai.apiKey;
-      }
-      if (state.ai.openaiKey === undefined) state.ai.openaiKey = "";
-      if (!state.ai.openaiModel) state.ai.openaiModel = "gpt-4o-mini";
-      if (state.ai.showKeyEditor === undefined) state.ai.showKeyEditor = !String(state.ai.openaiKey || "").trim();
-      state.ai.keyOk = /^sk-[A-Za-z0-9_\-]{20,}$/.test(String(state.ai.openaiKey || "").trim());
+      delete state.ai.openaiModel;
+      if (!state.ai.freeModel) state.ai.freeModel = "auto";
     }
 
     // Один общий чат на проект (склеиваем старые free + openrouter)
@@ -165,14 +162,14 @@ window.Store = {
         trailOn: [],
       },
       ai: {
-        provider: "openai",
+        provider: "free",
+        freeModel: "auto",
         apiKey: "",
         openaiKey: "",
-        openaiModel: "gpt-4o-mini",
-        keyOk: false,
+        keyOk: true,
         keyFp: "",
         keyStatus: "",
-        showKeyEditor: true,
+        showKeyEditor: false,
       },
       ui: { notesMode: "closed", editingNoteId: null, chatMode: "ai", docPreview: null },
       docs: { audience: "investor", lastFile: null },

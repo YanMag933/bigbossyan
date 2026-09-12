@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const VER = "29";
+  const VER = "30";
   let state = Store.load();
   BossDocs.syncAll(state);
   Store.save(state);
@@ -501,14 +501,10 @@
       mode === "project"
         ? Store.getProjectChat(state, p.id).slice(-40)
         : Store.getChat(state, p.id).slice(-40);
-    const hasKey = BossChat.hasKey(state);
-    const showKey = !!(state.ai && state.ai.showKeyEditor) || !hasKey;
     const empty =
       mode === "project"
         ? "Спроси точно: «цены», «патент», «прогресс». Или: «измени цену Стандарта на 10900»."
-        : hasKey
-          ? "Спроси совет: «что важнее на этой неделе?», «риски оффера», «нужен ли патент?»…"
-          : "Сначала вставь OpenAI API key (sk-…) — ChatGPT заработает. В РФ включи VPN.";
+        : "Спроси совет: «что важнее на этой неделе?», «риски оффера», «нужен ли патент?»…";
     return `
       ${projectSwitchHtml()}
       ${chatModeSwitchHtml()}
@@ -517,7 +513,7 @@
         <p>${
           mode === "project"
             ? "Точные факты из плана, Word и ИС — без лишнего шума, правки с подтверждением."
-            : "ChatGPT через OpenAI API: анализ и советы. VPN — если api.openai.com недоступен."
+            : "Бесплатные нейросети без ключей. Переключай модель, если одна перегружена."
         }</p>
       </div>
 
@@ -525,30 +521,15 @@
         ${
           mode === "ai"
             ? `<p class="small" style="margin:0;line-height:1.45;color:var(--gold,#d4af37)">${esc(BossChat.modelLabel(state))}</p>
-               ${
-                 hasKey
-                   ? `<p class="small muted" style="margin:8px 0 0;line-height:1.45">Ключ: ${esc(BossChat.keyHint(BossChat.getKey(state)))}. <button type="button" class="linkish" id="toggle-openai-key">Сменить</button></p>
-                      <label class="field" style="margin-top:10px">Модель
-                        <select id="openai-model-select">
-                          ${BossChat.MODELS.map(
-                            (m) =>
-                              `<option value="${esc(m)}" ${BossChat.model(state) === m ? "selected" : ""}>${esc(m)}</option>`
-                          ).join("")}
-                        </select>
-                      </label>
-                      <p class="tiny muted" style="margin:8px 0 0;line-height:1.4;text-transform:none;letter-spacing:0">Если «лимит/биллинг» — пополни OpenAI Billing. Если 404 — смени модель. VPN включи до отправки.</p>`
-                   : `<p class="small muted" style="margin:8px 0 0;line-height:1.45">Ключ: platform.openai.com → API keys. Нужен баланс в Billing. В РФ — VPN.</p>`
-               }
-               ${
-                 showKey
-                   ? `<form id="openai-key-form" class="stack" style="margin-top:12px">
-                        <label class="field">OpenAI API key
-                          <input type="password" id="openai-key-input" placeholder="sk-… или sk-proj-…" autocomplete="off" maxlength="300" />
-                        </label>
-                        <button type="submit" class="btn block">Сохранить ключ</button>
-                      </form>`
-                   : ""
-               }`
+               <label class="field" style="margin-top:10px">Модель
+                 <select id="free-model-select">
+                   ${BossChat.FREE_MODELS.map(
+                     (m) =>
+                       `<option value="${esc(m.id)}" ${BossChat.selectedId(state) === m.id ? "selected" : ""}>${esc(m.label)}</option>`
+                   ).join("")}
+                 </select>
+               </label>
+               <p class="tiny muted" style="margin:8px 0 0;line-height:1.4;text-transform:none;letter-spacing:0">Ключи не нужны. Если «лимит» — подожди минуту или выбери другую модель. «Авто» сам перебирает маршруты.</p>`
             : `<p class="small muted" style="margin:0;line-height:1.45">Отвечает коротко по теме запроса. Правки — только после «да» / кнопки.</p>`
         }
       </div>
@@ -811,13 +792,6 @@
   async function sendAiChat(text) {
     const msg = (text || "").trim();
     if (!msg || chatBusy) return;
-    if (!BossChat.hasKey(state)) {
-      if (!state.ai) state.ai = {};
-      state.ai.showKeyEditor = true;
-      save();
-      render();
-      return;
-    }
     const pid = state.activeProject;
     const thread = Store.getChat(state, pid);
     thread.push({ role: "user", text: msg, at: Date.now() });
@@ -1009,43 +983,12 @@
       });
     }
 
-    const keyForm = document.getElementById("openai-key-form");
-    if (keyForm) {
-      keyForm.addEventListener("submit", (e) => {
-        e.preventDefault();
-        const input = document.getElementById("openai-key-input");
-        const key = String((input && input.value) || "").trim();
-        if (!state.ai) state.ai = {};
-        if (!/^sk-[A-Za-z0-9_\-]{16,}$/.test(key)) {
-          alert("Ключ должен начинаться с sk- или sk-proj-. Возьми API key на platform.openai.com");
-          return;
-        }
-        state.ai.openaiKey = key;
-        state.ai.apiKey = key;
-        state.ai.keyOk = true;
-        state.ai.showKeyEditor = false;
-        state.ai.provider = "openai";
-        if (!state.ai.openaiModel) state.ai.openaiModel = "gpt-4o-mini";
-        save();
-        render();
-      });
-    }
-
-    const toggleKey = document.getElementById("toggle-openai-key");
-    if (toggleKey) {
-      toggleKey.addEventListener("click", () => {
-        if (!state.ai) state.ai = {};
-        state.ai.showKeyEditor = !state.ai.showKeyEditor;
-        save();
-        render();
-      });
-    }
-
-    const modelSelect = document.getElementById("openai-model-select");
+    const modelSelect = document.getElementById("free-model-select");
     if (modelSelect) {
       modelSelect.addEventListener("change", () => {
         if (!state.ai) state.ai = {};
-        state.ai.openaiModel = modelSelect.value || "gpt-4o-mini";
+        state.ai.freeModel = modelSelect.value || "auto";
+        state.ai.provider = "free";
         save();
         render();
       });

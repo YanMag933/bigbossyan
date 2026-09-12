@@ -1,59 +1,87 @@
 window.BossChat = {
   MIN_PRICE: 500,
-  DEFAULT_MODEL: "gpt-4o-mini",
-  timeoutMs: 60000,
-  MODELS: ["gpt-4o-mini", "gpt-4.1-mini", "gpt-4o", "gpt-3.5-turbo"],
+  timeoutMs: 45000,
+
+  // Проверенные бесплатные маршруты без API-ключей (Pollinations)
+  FREE_MODELS: [
+    {
+      id: "auto",
+      label: "Авто · перебор бесплатных",
+      routes: ["fast", "openai", "oss", "legacy"],
+    },
+    {
+      id: "fast",
+      label: "GPT-OSS · быстро",
+      routes: ["fast", "legacy"],
+    },
+    {
+      id: "openai",
+      label: "OpenAI-proxy · бесплатно",
+      routes: ["openai", "legacy"],
+    },
+    {
+      id: "oss",
+      label: "GPT-OSS 20B",
+      routes: ["oss", "fast"],
+    },
+    {
+      id: "legacy",
+      label: "Классика · запасной канал",
+      routes: ["legacy", "fast"],
+    },
+  ],
+
+  ROUTES: {
+    fast: {
+      url: "https://text.pollinations.ai/v1/chat/completions",
+      model: "openai-fast",
+    },
+    openai: {
+      url: "https://text.pollinations.ai/v1/chat/completions",
+      model: "openai",
+    },
+    oss: {
+      url: "https://text.pollinations.ai/v1/chat/completions",
+      model: "gpt-oss",
+    },
+    legacy: {
+      url: "https://text.pollinations.ai/",
+      model: "openai",
+      legacy: true,
+    },
+  },
 
   provider() {
-    return "openai";
+    return "free";
   },
 
   mode() {
-    return "chatgpt";
+    return "free";
   },
 
-  getKey(state) {
-    const k = (state && state.ai && (state.ai.openaiKey || state.ai.apiKey)) || "";
-    return String(k).trim();
+  hasKey() {
+    return true;
   },
 
-  hasKey(state) {
-    const k = this.getKey(state);
-    // sk-... и sk-proj-...
-    return /^sk-[A-Za-z0-9_\-]{16,}$/.test(k);
+  selectedId(state) {
+    const id = state && state.ai && state.ai.freeModel;
+    if (this.FREE_MODELS.some((m) => m.id === id)) return id;
+    return "auto";
   },
 
-  model(state) {
-    return (state && state.ai && state.ai.openaiModel) || this.DEFAULT_MODEL;
-  },
-
-  modelQueue(state) {
-    const preferred = this.model(state);
-    const rest = this.MODELS.filter((m) => m !== preferred);
-    return [preferred].concat(rest);
+  selected(state) {
+    const id = this.selectedId(state);
+    return this.FREE_MODELS.find((m) => m.id === id) || this.FREE_MODELS[0];
   },
 
   modelLabel(state) {
-    if (!this.hasKey(state)) return "ChatGPT · нужен API-ключ OpenAI";
-    return "ChatGPT · " + this.model(state);
-  },
-
-  keyHint(key) {
-    const k = String(key || "").trim();
-    if (!k) return "";
-    if (k.length < 10) return k;
-    return k.slice(0, 8) + "…" + k.slice(-4);
+    return "Бесплатно · " + this.selected(state).label;
   },
 
   async ask(message, projectId, state) {
-    if (!this.hasKey(state)) {
-      throw new Error(
-        "Нет ключа OpenAI. Вставь API key (sk-… / sk-proj-…) ниже. В РФ включи VPN."
-      );
-    }
-    const history = Store.getChat(state, projectId).slice(-8);
+    const history = Store.getChat(state, projectId).slice(-6);
     const userMsg = this.enrichUserMessage(message);
-    const raw = await this.callOpenAI(userMsg, projectId, state, history);
+    const raw = await this.callFree(userMsg, projectId, state, history);
     const parsed = this.parseModelJson(raw);
     parsed.patches = this.sanitizePatches(parsed.patches || [], projectId, message);
     return parsed;
@@ -68,46 +96,53 @@ window.BossChat = {
 
   enrichUserMessage(message) {
     if (!this.isPriceAdviceQuestion(message)) return message;
+    return String(message).trim() + "\n[Цены в контексте — факт. Предложи другие цифры. patches=[].]";
+  },
+
+  buildSystemPrompt(projectId, state, slim) {
+    const ctx = slim || this.slimContext(projectId, state);
     return (
-      String(message).trim() +
-      "\n\n[Текущие цены в контексте — факт. Предложи ДРУГИЕ цифры, не копируй прайс. patches=[].]"
+      "Ты бизнес-советник BigBossYan для Яна. По-русски, коротко, с анализом и советом. " +
+      "Контекст: " +
+      JSON.stringify(ctx) +
+      ' Ответ строго JSON: {"reply":"текст","patches":[]}. patches=[] если не просят менять план/цену.'
     );
   },
 
-  buildSystemPrompt(projectId, state) {
+  slimContext(projectId, state, tiny) {
     const ctx = window.ProjectLive.contextForAi(projectId, state);
-    const slim = {
+    if (tiny) {
+      return {
+        name: ctx.name,
+        stage: ctx.stage,
+        pct: ctx.progressPct,
+        pricing: (ctx.pricing || []).slice(0, 3),
+        next: (ctx.nextTasks || []).slice(0, 2).map((t) => t.title),
+      };
+    }
+    return {
       name: ctx.name,
       stage: ctx.stage,
       progressPct: ctx.progressPct,
       pricing: ctx.pricing,
-      nextTasks: (ctx.nextTasks || []).slice(0, 4),
-      notes: (ctx.notes || []).slice(0, 3),
-      recommendations: (ctx.recommendations || []).slice(0, 3).map((r) => r.title + ": " + r.body),
-      ip: ctx.ipRights
-        ? { summary: ctx.ipRights.summary, costs: ctx.ipRights.costs, what: ctx.ipRights.what }
-        : null,
+      nextTasks: (ctx.nextTasks || []).slice(0, 3).map((t) => t.title),
+      recs: (ctx.recommendations || []).slice(0, 2).map((r) => r.title),
+      ip: ctx.ipRights ? String(ctx.ipRights.summary || "").slice(0, 220) : null,
     };
-    return (
-      "Ты бизнес-советник BigBossYan для основателя Яна. Отвечай по-русски: коротко, с анализом и конкретными советами. " +
-      "Рассуждай, сравнивай варианты, указывай риски. Не копируй базу списком — дай вывод. " +
-      "Контекст проекта: " +
-      JSON.stringify(slim) +
-      ' Ответ — JSON объект: {"reply":"текст человеку","patches":[]}. ' +
-      "patches=[] по умолчанию; патч только если явно просят изменить план/цену."
-    );
   },
 
-  buildMessages(message, projectId, state, history) {
-    const messages = [{ role: "system", content: this.buildSystemPrompt(projectId, state) }];
-    for (const m of (history || []).slice(-6)) {
+  buildMessages(message, projectId, state, history, tiny) {
+    const messages = [
+      { role: "system", content: this.buildSystemPrompt(projectId, state, this.slimContext(projectId, state, tiny)) },
+    ];
+    for (const m of (history || []).slice(tiny ? -2 : -4)) {
       if (!m || !m.text) continue;
-      // не тащим старые ошибки в контекст модели
       if (m.role === "assistant" && /^Не получилось/i.test(String(m.text || ""))) continue;
-      if (m.role === "user") messages.push({ role: "user", content: String(m.text).slice(0, 1000) });
-      else if (m.role === "assistant") messages.push({ role: "assistant", content: String(m.text).slice(0, 1500) });
+      if (m.role === "user") messages.push({ role: "user", content: String(m.text).slice(0, tiny ? 400 : 700) });
+      else if (m.role === "assistant")
+        messages.push({ role: "assistant", content: String(m.text).slice(0, tiny ? 500 : 900) });
     }
-    messages.push({ role: "user", content: String(message).slice(0, 1500) });
+    messages.push({ role: "user", content: String(message).slice(0, tiny ? 500 : 900) });
     return messages;
   },
 
@@ -127,117 +162,90 @@ window.BossChat = {
     });
   },
 
-  mapOpenAIError(status, data, raw) {
-    const apiMsg = (data && data.error && data.error.message) || "";
-    const code = (data && data.error && (data.error.code || data.error.type)) || "";
-    const blob = (apiMsg + " " + code + " " + (raw || "")).toLowerCase();
-
-    if (status === 401) return new Error("Неверный API-ключ OpenAI. Смени ключ (Сменить).");
-    if (status === 403) {
-      return new Error("Доступ запрещён. Включи VPN и проверь, что ключ не ограничен по IP/проекту.");
-    }
-    if (status === 429) {
-      if (/insufficient_quota|billing|exceeded.*quota|payment/i.test(blob)) {
-        return new Error(
-          "На аккаунте OpenAI нет квоты/денег. Пополни Billing: platform.openai.com → Settings → Billing, подожди 1–2 мин и повтори."
-        );
-      }
-      return new Error("Слишком много запросов (rate limit). Подожди 20–40 сек и повтори.");
-    }
-    if (status === 404 || /model_not_found|does not exist|invalid model/i.test(blob)) {
-      return new Error("MODEL_404");
-    }
-    return new Error(apiMsg || "HTTP " + status);
-  },
-
-  async requestOnce(key, model, messages) {
-    let res;
-    try {
-      res = await this.withTimeout(
-        fetch("https://api.openai.com/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: "Bearer " + key,
-          },
-          body: JSON.stringify({
-            model,
-            temperature: 0.55,
-            messages,
-            response_format: { type: "json_object" },
-          }),
-          cache: "no-store",
-        }),
-        this.timeoutMs
-      );
-    } catch (e) {
-      const msg = String((e && e.message) || e || "");
-      if (/Таймаут/i.test(msg)) throw e;
-      throw new Error("Сеть до OpenAI не прошла. Включи VPN (api.openai.com) и повтори.");
-    }
-
-    const raw = await res.text();
-    let data = null;
-    try {
-      data = JSON.parse(raw);
-    } catch (_) {}
-
-    if (!res.ok) throw this.mapOpenAIError(res.status, data, raw);
-
-    const content =
-      data &&
-      data.choices &&
-      data.choices[0] &&
-      data.choices[0].message &&
-      data.choices[0].message.content;
-    if (!content || !String(content).trim()) throw new Error("Пустой ответ ChatGPT");
-    return { text: String(content).trim(), model };
-  },
-
-  async callOpenAI(message, projectId, state, history) {
-    const messages = this.buildMessages(message, projectId, state, history);
-    const key = this.getKey(state);
-    const queue = this.modelQueue(state);
+  async callFree(message, projectId, state, history) {
+    const sel = this.selected(state);
+    const routeIds = sel.routes || ["fast", "openai", "legacy"];
     let lastErr = null;
 
-    for (const model of queue) {
-      try {
-        const out = await this.requestOnce(key, model, messages);
-        // запоминаем рабочую модель
-        if (state && state.ai && state.ai.openaiModel !== out.model) {
-          state.ai.openaiModel = out.model;
+    // полный контекст → урезанный при 402
+    for (const tiny of [false, true]) {
+      const messages = this.buildMessages(message, projectId, state, history, tiny);
+      for (const rid of routeIds) {
+        const route = this.ROUTES[rid];
+        if (!route) continue;
+        try {
+          const text = await this.withTimeout(this.fetchRoute(route, messages), this.timeoutMs);
+          if (text && String(text).trim()) {
+            if (state && state.ai) state.ai.lastFreeRoute = rid;
+            return String(text).trim();
+          }
+        } catch (e) {
+          lastErr = e;
+          const msg = String((e && e.message) || e || "");
+          if (/402|quota|Payment|UNAUTHORIZED|401/i.test(msg)) continue;
+          if (/404|model/i.test(msg)) continue;
+          continue;
         }
-        return out.text;
-      } catch (e) {
-        lastErr = e;
-        const msg = String((e && e.message) || e || "");
-        // модель недоступна — пробуем следующую
-        if (msg === "MODEL_404" || /MODEL_404|model_not_found|404/i.test(msg)) continue;
-        // биллинг / ключ / сеть — сразу наружу
-        throw e;
       }
     }
 
     throw (
       lastErr ||
-      new Error(
-        "Ни одна модель ChatGPT не ответила для этого ключа. В OpenAI Project проверь доступ к моделям или выбери gpt-3.5-turbo."
-      )
+      new Error("Бесплатные модели сейчас перегружены. Подожди минуту или переключи модель.")
     );
+  },
+
+  async fetchRoute(route, messages) {
+    const bodyObj = route.legacy
+      ? { model: route.model, messages, temperature: 0.55 }
+      : { model: route.model, messages, temperature: 0.55 };
+
+    let res;
+    try {
+      res = await fetch(route.url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json, text/plain, */*",
+        },
+        body: JSON.stringify(bodyObj),
+        cache: "no-store",
+      });
+    } catch (e) {
+      throw new Error("Сеть: не удалось связаться с бесплатной нейросетью");
+    }
+
+    const raw = await res.text();
+    if (res.status === 402) throw new Error("402");
+    if (res.status === 401) throw new Error("401");
+    if (!res.ok) throw new Error("HTTP " + res.status);
+
+    if (!raw || !String(raw).trim()) throw new Error("Пустой ответ");
+
+    try {
+      const obj = JSON.parse(raw);
+      const choice = obj.choices && obj.choices[0] && obj.choices[0].message && obj.choices[0].message.content;
+      if (choice) return String(choice);
+      if (obj.reply) return String(obj.reply);
+      if (typeof obj === "string") return obj;
+    } catch (_) {}
+
+    return raw;
   },
 
   friendlyError(err) {
     const msg = String((err && err.message) || err || "");
-    if (msg === "MODEL_404") {
-      return "Модель недоступна для ключа. Выбери другую модель ниже или открой доступ в OpenAI Project.";
+    if (/402|quota|Payment|перегруж/i.test(msg)) {
+      return "Бесплатный лимит на сейчас. Подожди 30–60 сек или выбери другую модель сверху.";
     }
-    if (/ключ|API key|sk-/i.test(msg)) return msg;
-    if (/VPN|api\.openai|Сеть до OpenAI|Billing|квот|rate limit|биллинг/i.test(msg)) return msg;
-    if (/Таймаут/i.test(msg)) return msg + ". При VPN иногда дольше — повтори.";
-    if (/Load failed|Failed to fetch|NetworkError/i.test(msg)) {
-      return "Сеть оборвалась. Включи VPN и проверь api.openai.com.";
+    if (/401|UNAUTHORIZED/i.test(msg)) {
+      return "Этот бесплатный маршрут сейчас закрыт. Переключи модель (Авто / GPT-OSS).";
     }
-    return msg.slice(0, 320);
+    if (/Таймаут/i.test(msg)) return msg + ". Повтори — бесплатные модели иногда тормозят.";
+    if (/Сеть|Load failed|Failed to fetch|NetworkError/i.test(msg)) {
+      return "Сеть оборвалась. Проверь интернет и повтори.";
+    }
+    return msg.slice(0, 280);
   },
 
   parseModelJson(raw) {
