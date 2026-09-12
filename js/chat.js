@@ -3,22 +3,22 @@ window.BossChat = {
 
   OPENROUTER: {
     endpoint: "https://openrouter.ai/api/v1/chat/completions",
-    /** Актуальный список: старые deepseek*:free больше не существуют */
+    model: "google/gemma-4-31b-it:free",
+    label: "Gemma 4",
     models: [
-      "openrouter/free",
       "google/gemma-4-31b-it:free",
+      "openrouter/free",
       "nvidia/nemotron-3.5-lightning:free",
       "thinkingmachines/inkling:free",
-      "poolside/laguna-s-2.1:free",
-      "nex-agi/nex-n2.5-mini:free",
       "deepseek/deepseek-chat-v3-0324",
     ],
   },
 
   FREE: {
     endpoint: "https://text.pollinations.ai/openai",
-    /** Анонимный Pollinations сейчас отдаёт только openai-fast (alias: openai) */
     models: ["openai-fast", "openai"],
+    cooldownMs: 16000,
+    lastCallAt: 0,
   },
 
   provider(state) {
@@ -54,13 +54,29 @@ window.BossChat = {
     }
 
     const history = Store.getChat(state, projectId, provider).slice(-12);
+    const userMsg = this.enrichUserMessage(message);
     const raw =
       provider === "free"
-        ? await this.callFree(message, projectId, state, history)
-        : await this.callOpenRouter(message, projectId, state, history);
+        ? await this.callFree(userMsg, projectId, state, history)
+        : await this.callOpenRouter(userMsg, projectId, state, history);
     const parsed = this.parseModelJson(raw);
     parsed.patches = this.sanitizePatches(parsed.patches || [], projectId, message);
     return parsed;
+  },
+
+  isPriceAdviceQuestion(message) {
+    const lower = String(message || "").toLowerCase();
+    return /вариант\w*\s+цен|цен\w*\s+вариант|предложи.*цен|пересмотр.*цен|альтернатив\w*\s+цен|дешевле|дороже/.test(
+      lower
+    );
+  },
+
+  enrichUserMessage(message) {
+    if (!this.isPriceAdviceQuestion(message)) return message;
+    return (
+      String(message).trim() +
+      "\n\n[Важно: текущие цены в контексте — это факт «как сейчас». Предложи ДРУГИЕ цифры (не копируй текущий прайс как ответ). Для каждого варианта: новая цена / пакет, чем отличается от текущего, плюсы/минусы. Патчи в план не ставь.]"
+    );
   },
 
   buildSystemPrompt(projectId, state) {
@@ -88,12 +104,14 @@ ${JSON.stringify(
 )}
 
 Как думать:
-- Прочитай вопрос буквально. «Предложи 3 варианта цены» = совет и сравнение, НЕ смена цены в плане.
-- Число «3» в таком вопросе — количество вариантов, НЕ цена 3 ₽.
+- Прочитай вопрос буквально. «Предложи 3 варианта цены» = совет и сравнение, НЕ смена цены в плане и НЕ копипаст текущего прайса.
+- Число «3» в таком вопросе — количество альтернативных сценариев, НЕ цена 3 ₽.
+- Поле pricing / пакеты в контексте — это ТЕКУЩИЕ цены (факт). Если просят варианты — предложи ДРУГИЕ цифры: обычно смесь ниже / около / выше текущих, с обоснованием для каждого пакета или линейки.
+- Запрещено отвечать списком текущих цен (например просто повторить 9900 / 19900 / 49000) как «три варианта».
 - Цены пакетов — обычно тысячи рублей (Life RPG ~5–25 тыс., TrailOn подписка ~3–7 тыс./точка).
-- Опирайся на прайс, прогресс, SWOT и рекомендации из контекста. Не выдумывай выручку, которой нет.
-- Отвечай по-русски, спокойно и по делу: сначала вывод/разбор, потом конкретика.
-- Не раздувай ответ водой, но и не отвечай одной резкой фразой.
+- Опирайся на прайс, прогресс, SWOT, заметки и рекомендации. Не выдумывай выручку, которой нет.
+- Отвечай по-русски, спокойно и по делу: сначала вывод, потом конкретика по вариантам.
+- Не раздувай ответ водой.
 
 Правки плана (patches):
 - По умолчанию patches = [].
@@ -126,15 +144,22 @@ ${JSON.stringify(
     return messages;
   },
 
+  modelLabel(state) {
+    if (this.provider(state) === "free") return "Pollinations · openai-fast";
+    return (this.OPENROUTER.label || "Gemma 4") + " · OpenRouter";
+  },
+
   openRouterModels(state) {
     const dead = /deepseek.*:free|deepseek-chat-v3-0324:free/i;
-    const preferred = String((state.ai && state.ai.openrouterModel) || "").trim();
+    const preferred =
+      String((state.ai && state.ai.openrouterModel) || this.OPENROUTER.model || "").trim() ||
+      this.OPENROUTER.model;
     const list = [];
     if (preferred && !dead.test(preferred)) list.push(preferred);
     for (const m of this.OPENROUTER.models) {
       if (!list.includes(m) && !dead.test(m)) list.push(m);
     }
-    return list.length ? list : ["openrouter/free"];
+    return list.length ? list : [this.OPENROUTER.model];
   },
 
   extractAltSlug(errMsg) {
@@ -231,19 +256,27 @@ ${JSON.stringify(
   },
 
   async callFree(message, projectId, state, history) {
+    const wait = this.FREE.cooldownMs - (Date.now() - (this.FREE.lastCallAt || 0));
+    if (wait > 0) {
+      throw new Error(
+        "Подожди " + Math.ceil(wait / 1000) + " сек — у бесплатного канала лимит ~1 запрос / 15 сек."
+      );
+    }
+
     const messages = this.buildMessages(message, projectId, state, history);
     if (messages[0] && messages[0].role === "system") {
       const short = messages[0].content;
-      // На телефоне большой system иногда рвёт анонимный канал (Load failed)
-      if (short.length > 3500) messages[0].content = short.slice(0, 3500) + "\n…";
+      if (short.length > 2800) messages[0].content = short.slice(0, 2800) + "\n…";
     }
-    const hist = messages.filter((m) => m.role !== "system").slice(-6);
+    const hist = messages.filter((m) => m.role !== "system").slice(-4);
     const payloadMessages = [messages[0]].concat(hist);
 
     let lastErr = null;
     for (const model of this.FREE.models) {
       try {
-        return await this.requestFree(model, payloadMessages);
+        const out = await this.requestFree(model, payloadMessages);
+        this.FREE.lastCallAt = Date.now();
+        return out;
       } catch (e) {
         lastErr = e;
         continue;
@@ -254,6 +287,9 @@ ${JSON.stringify(
 
   friendlyError(err) {
     const msg = String((err && err.message) || err || "");
+    if (/402|Payment Required|budget|pollen/i.test(msg)) {
+      return "Бесплатный канал временно занят/лимит исчерпан (402). Подожди ~20 сек или переключись на OpenRouter.";
+    }
     if (/Load failed|Failed to fetch|NetworkError|network/i.test(msg)) {
       return "Сеть оборвала запрос (Load failed). Проверь интернет / VPN и попробуй ещё раз через несколько секунд.";
     }
@@ -262,6 +298,9 @@ ${JSON.stringify(
     }
     if (/Таймаут/i.test(msg)) {
       return msg + " Повтори запрос чуть позже.";
+    }
+    if (/подожди|cooldown/i.test(msg)) {
+      return msg;
     }
     if (/401|Unauthorized|invalid.*key|User not found/i.test(msg)) {
       return "Ключ OpenRouter не принят. Создай новый на openrouter.ai/keys и сохрани снова.";
@@ -301,7 +340,7 @@ ${JSON.stringify(
     }
 
     // Мини-пинг модели — чтобы не было сюрприза уже в чате
-    await this.requestOpenRouter(clean, "openrouter/free", [
+    await this.requestOpenRouter(clean, this.OPENROUTER.model, [
       { role: "user", content: 'Ответь строго JSON: {"reply":"ок","patches":[]}' },
     ]);
 

@@ -19,6 +19,7 @@ window.Store = {
         chat: { ...this.blank().chat, ...(parsed.chat || {}) },
         ai: { ...this.blank().ai, ...(parsed.ai || {}) },
         docs: { ...this.blank().docs, ...(parsed.docs || {}) },
+        ui: { ...this.blank().ui, ...(parsed.ui || {}) },
       };
       this.migrate(state);
       return state;
@@ -59,7 +60,7 @@ window.Store = {
     });
     if (state.tab === "boss") state.tab = "chat";
     if (state.ai) {
-      state.ai.openrouterModel = "openrouter/free";
+      state.ai.openrouterModel = "google/gemma-4-31b-it:free";
       if (state.ai.provider === "gemini") state.ai.provider = "openrouter";
       if (!state.ai.provider || state.ai.provider === "pollinations") state.ai.provider = "free";
       if (state.ai.apiKey && /^AIza/i.test(state.ai.apiKey)) {
@@ -80,6 +81,35 @@ window.Store = {
         if (!Array.isArray(bucket.openrouter)) bucket.openrouter = [];
       }
     }
+
+    // Заметки: строка → массив карточек
+    if (!state.notes || typeof state.notes !== "object") state.notes = {};
+    for (const pid of ["lifeRpg", "trailOn"]) {
+      const n = state.notes[pid];
+      if (typeof n === "string") {
+        const body = n.trim();
+        state.notes[pid] = body
+          ? [
+              {
+                id: "legacy-" + pid,
+                title: "Из старых заметок",
+                body,
+                at: Date.now(),
+                updatedAt: Date.now(),
+              },
+            ]
+          : [];
+      } else if (!Array.isArray(n)) {
+        state.notes[pid] = [];
+      }
+    }
+
+    if (!state.ui || typeof state.ui !== "object") {
+      state.ui = { notesMode: "closed", editingNoteId: null };
+    } else {
+      if (!state.ui.notesMode) state.ui.notesMode = "closed";
+      if (state.ui.editingNoteId === undefined) state.ui.editingNoteId = null;
+    }
   },
 
   blank() {
@@ -87,7 +117,7 @@ window.Store = {
       activeProject: "lifeRpg",
       tab: "hq",
       done: { lifeRpg: {}, trailOn: {} },
-      notes: { lifeRpg: "", trailOn: "" },
+      notes: { lifeRpg: [], trailOn: [] },
       overrides: { lifeRpg: {}, trailOn: {} },
       wins: [],
       installDismissed: false,
@@ -98,14 +128,72 @@ window.Store = {
       ai: {
         provider: "free",
         apiKey: "",
-        openrouterModel: "openrouter/free",
+        openrouterModel: "google/gemma-4-31b-it:free",
         keyOk: false,
         keyFp: "",
         keyStatus: "",
         showKeyEditor: true,
       },
+      ui: { notesMode: "closed", editingNoteId: null },
       docs: { audience: "investor", lastFile: null },
     };
+  },
+
+  ensureNotes(state, projectId) {
+    if (!state.notes) state.notes = {};
+    if (typeof state.notes[projectId] === "string") {
+      const body = String(state.notes[projectId] || "").trim();
+      state.notes[projectId] = body
+        ? [{ id: "legacy-" + projectId, title: "Из старых заметок", body, at: Date.now(), updatedAt: Date.now() }]
+        : [];
+    }
+    if (!Array.isArray(state.notes[projectId])) state.notes[projectId] = [];
+    return state.notes[projectId];
+  },
+
+  notesList(state, projectId) {
+    return this.ensureNotes(state, projectId)
+      .slice()
+      .sort((a, b) => (b.updatedAt || b.at || 0) - (a.updatedAt || a.at || 0));
+  },
+
+  addNote(state, projectId, title, body) {
+    const list = this.ensureNotes(state, projectId);
+    const now = Date.now();
+    const note = {
+      id: "n" + now.toString(36) + Math.random().toString(36).slice(2, 7),
+      title: String(title || "").trim() || "Без названия",
+      body: String(body || "").trim(),
+      at: now,
+      updatedAt: now,
+    };
+    if (!note.body) return null;
+    list.unshift(note);
+    return note;
+  },
+
+  updateNote(state, projectId, noteId, title, body) {
+    const list = this.ensureNotes(state, projectId);
+    const note = list.find((n) => n.id === noteId);
+    if (!note) return null;
+    note.title = String(title || "").trim() || "Без названия";
+    note.body = String(body || "").trim();
+    note.updatedAt = Date.now();
+    return note;
+  },
+
+  removeNote(state, projectId, noteId) {
+    const list = this.ensureNotes(state, projectId);
+    const idx = list.findIndex((n) => n.id === noteId);
+    if (idx < 0) return false;
+    list.splice(idx, 1);
+    return true;
+  },
+
+  notesForAi(state, projectId, limit) {
+    return this.notesList(state, projectId)
+      .slice(0, limit || 6)
+      .map((n) => ({ title: n.title, body: n.body }));
   },
 
   chatProvider(state) {

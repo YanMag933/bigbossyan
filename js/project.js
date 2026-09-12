@@ -139,7 +139,7 @@ window.ProjectLive = {
         phase: t.phaseTitle,
       })),
       recentWins: wins.map((w) => w.text),
-      notes: (state.notes && state.notes[projectId]) || "",
+      notes: window.Store.notesForAi(state, projectId, 6),
     };
   },
 };

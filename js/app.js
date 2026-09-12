@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const VER = "13";
+  const VER = "14";
   let state = Store.load();
   let deferredPrompt = null;
   let chatBusy = false;
@@ -39,8 +39,106 @@
   function setProject(id) {
     if (!BossData.projects[id]) return;
     state.activeProject = id;
+    if (!state.ui) state.ui = { notesMode: "closed", editingNoteId: null };
+    state.ui.notesMode = "closed";
+    state.ui.editingNoteId = null;
     save();
     render();
+  }
+
+  function formatNoteDate(ts) {
+    if (!ts) return "";
+    try {
+      return new Date(ts).toLocaleString("ru-RU", {
+        day: "2-digit",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch {
+      return "";
+    }
+  }
+
+  function notePreview(body) {
+    const t = String(body || "").replace(/\s+/g, " ").trim();
+    return t.length > 90 ? t.slice(0, 90) + "…" : t;
+  }
+
+  function renderNotesSection(projectId) {
+    if (!state.ui) state.ui = { notesMode: "closed", editingNoteId: null };
+    const mode = state.ui.notesMode || "closed";
+    const list = Store.notesList(state, projectId);
+    const n = list.length;
+
+    if (mode === "edit") {
+      const note = list.find((x) => x.id === state.ui.editingNoteId) || Store.ensureNotes(state, projectId).find((x) => x.id === state.ui.editingNoteId);
+      if (!note) {
+        state.ui.notesMode = "list";
+        state.ui.editingNoteId = null;
+        return renderNotesSection(projectId);
+      }
+      return `
+      <div class="section-title">Заметки босса</div>
+      <div class="panel notes-panel">
+        <div class="row between wrap" style="gap:8px;margin-bottom:12px">
+          <button type="button" class="btn secondary" id="notes-back" style="width:auto;padding:8px 12px">← К ленте</button>
+          <button type="button" class="btn secondary" id="note-delete" style="width:auto;padding:8px 12px;color:#e8a0a0">Удалить</button>
+        </div>
+        <form id="note-edit-form" class="note-form">
+          <label class="field">Заголовок
+            <input type="text" id="note-edit-title" maxlength="80" value="${esc(note.title || "")}" autocomplete="off" />
+          </label>
+          <label class="field" style="margin-top:10px">Текст
+            <textarea class="notes-area" id="note-edit-body" placeholder="Текст заметки…">${esc(note.body || "")}</textarea>
+          </label>
+          <button type="submit" class="btn block" style="margin-top:12px">Сохранить</button>
+        </form>
+      </div>`;
+    }
+
+    if (mode === "list") {
+      return `
+      <div class="section-title">Заметки босса</div>
+      <div class="panel notes-panel">
+        <div class="row between wrap" style="gap:8px;margin-bottom:12px">
+          <button type="button" class="btn secondary" id="notes-back" style="width:auto;padding:8px 12px">← Закрыть</button>
+          <span class="tag gold">${n}</span>
+        </div>
+        <div class="notes-feed">
+          ${
+            list.length
+              ? list
+                  .map(
+                    (note) => `
+            <button type="button" class="note-card" data-note-id="${esc(note.id)}">
+              <div class="note-card-title">${esc(note.title || "Без названия")}</div>
+              <div class="note-card-preview">${esc(notePreview(note.body))}</div>
+              <div class="tiny muted note-card-date">${esc(formatNoteDate(note.updatedAt || note.at))}</div>
+            </button>`
+                  )
+                  .join("")
+              : '<div class="empty" style="padding:8px 0">Пока нет заметок — добавь ниже на штабе.</div>'
+          }
+        </div>
+      </div>`;
+    }
+
+    return `
+      <div class="section-title">Заметки босса</div>
+      <div class="panel notes-panel">
+        <button type="button" class="btn secondary block" id="notes-open">Заметки (${n})</button>
+        <form id="note-new-form" class="note-form" style="margin-top:14px">
+          <div class="tiny muted" style="margin-bottom:8px">Новая</div>
+          <label class="field">Заголовок
+            <input type="text" id="note-new-title" maxlength="80" placeholder="Например: цены / блокеры" autocomplete="off" />
+          </label>
+          <label class="field" style="margin-top:10px">Текст
+            <textarea class="notes-area" id="note-new-body" placeholder="Мысли, цифры недели, блокеры…"></textarea>
+          </label>
+          <button type="submit" class="btn block" style="margin-top:12px">Сохранить</button>
+        </form>
+      </div>`;
   }
 
   function toggleTask(taskId) {
@@ -188,10 +286,7 @@
         </div>
       </div>
 
-      <div class="section-title">Заметки босса</div>
-      <div class="panel">
-        <textarea class="notes-area" id="notes" placeholder="Мысли, цифры недели, блокеры…">${esc(state.notes[p.id] || "")}</textarea>
-      </div>
+      ${renderNotesSection(p.id)}
     `;
   }
 
@@ -380,10 +475,10 @@
         </div>
         ${
           isFree
-            ? `<p class="small muted" style="margin:12px 0 0;line-height:1.45">Чат «Бесплатный»: без ключа. История не смешивается с OpenRouter.</p>`
+            ? `<p class="small muted" style="margin:12px 0 0;line-height:1.45">Чат «Бесплатный»: ${esc(BossChat.modelLabel(state))}. История не смешивается с OpenRouter.</p>`
             : keyOk && !showKeyForm
               ? `<div style="margin-top:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
-                  <p class="small" style="margin:0;line-height:1.45;color:var(--gold,#d4af37)">Ключ OpenRouter работает</p>
+                  <p class="small" style="margin:0;line-height:1.45;color:var(--gold,#d4af37)">Ключ OpenRouter работает · ${esc(BossChat.modelLabel(state))}</p>
                   <button type="button" class="btn secondary" id="change-ai-key" style="width:auto;padding:8px 12px">Сменить</button>
                 </div>
                 <p class="small muted" style="margin:8px 0 0;line-height:1.4">${esc(state.ai.keyFp || "")}</p>`
@@ -400,7 +495,7 @@
               ? "Проверяю ключ на OpenRouter…"
               : keyStatus
                 ? esc(keyStatus)
-                : "После сохранения сразу проверю ключ. Если ок — это окно скроется."
+                : "После сохранения сразу проверю ключ. Модель: " + esc(BossChat.modelLabel(state)) + "."
           }
         </p>`
         }
@@ -455,7 +550,7 @@
     keyCheckBusy = true;
     state.ai.apiKey = key;
     state.ai.provider = "openrouter";
-    state.ai.openrouterModel = "openrouter/free";
+    state.ai.openrouterModel = BossChat.OPENROUTER.model;
     state.ai.keyOk = false;
     state.ai.keyStatus = "Проверяю ключ…";
     state.ai.showKeyEditor = true;
@@ -630,14 +725,105 @@
       });
     }
 
-    const notes = document.getElementById("notes");
-    if (notes) {
-      const persist = () => {
-        state.notes[state.activeProject] = notes.value;
+    const notesOpen = document.getElementById("notes-open");
+    if (notesOpen) {
+      notesOpen.addEventListener("click", () => {
+        if (!state.ui) state.ui = { notesMode: "closed", editingNoteId: null };
+        state.ui.notesMode = "list";
+        state.ui.editingNoteId = null;
         save();
-      };
-      notes.addEventListener("change", persist);
-      notes.addEventListener("blur", persist);
+        render();
+      });
+    }
+
+    const notesBack = document.getElementById("notes-back");
+    if (notesBack) {
+      notesBack.addEventListener("click", () => {
+        if (!state.ui) state.ui = { notesMode: "closed", editingNoteId: null };
+        if (state.ui.notesMode === "edit") {
+          state.ui.notesMode = "list";
+          state.ui.editingNoteId = null;
+        } else {
+          state.ui.notesMode = "closed";
+          state.ui.editingNoteId = null;
+        }
+        save();
+        render();
+      });
+    }
+
+    app.querySelectorAll("[data-note-id]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (!state.ui) state.ui = { notesMode: "closed", editingNoteId: null };
+        state.ui.notesMode = "edit";
+        state.ui.editingNoteId = btn.dataset.noteId;
+        save();
+        render();
+      });
+    });
+
+    const noteNewForm = document.getElementById("note-new-form");
+    if (noteNewForm) {
+      noteNewForm.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const titleEl = document.getElementById("note-new-title");
+        const bodyEl = document.getElementById("note-new-body");
+        const created = Store.addNote(
+          state,
+          state.activeProject,
+          titleEl && titleEl.value,
+          bodyEl && bodyEl.value
+        );
+        if (!created) {
+          alert("Нужен текст заметки");
+          return;
+        }
+        if (!state.ui) state.ui = { notesMode: "closed", editingNoteId: null };
+        state.ui.notesMode = "list";
+        state.ui.editingNoteId = null;
+        save();
+        render();
+      });
+    }
+
+    const noteEditForm = document.getElementById("note-edit-form");
+    if (noteEditForm) {
+      noteEditForm.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const titleEl = document.getElementById("note-edit-title");
+        const bodyEl = document.getElementById("note-edit-body");
+        const id = state.ui && state.ui.editingNoteId;
+        if (!id) return;
+        const updated = Store.updateNote(
+          state,
+          state.activeProject,
+          id,
+          titleEl && titleEl.value,
+          bodyEl && bodyEl.value
+        );
+        if (!updated || !String(bodyEl && bodyEl.value || "").trim()) {
+          alert("Нужен текст заметки");
+          return;
+        }
+        state.ui.notesMode = "list";
+        state.ui.editingNoteId = null;
+        save();
+        render();
+      });
+    }
+
+    const noteDelete = document.getElementById("note-delete");
+    if (noteDelete) {
+      noteDelete.addEventListener("click", () => {
+        const id = state.ui && state.ui.editingNoteId;
+        if (!id) return;
+        if (!confirm("Удалить эту заметку?")) return;
+        Store.removeNote(state, state.activeProject, id);
+        state.ui.notesMode = "list";
+        state.ui.editingNoteId = null;
+        save();
+        render();
+      });
     }
 
     app.querySelectorAll("[data-ai-provider]").forEach((btn) => {
