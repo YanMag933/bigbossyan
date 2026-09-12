@@ -71,18 +71,6 @@ window.BossChat = {
     );
   },
 
-  buildPrompt(message, projectId, state, history) {
-    const parts = [this.buildSystemPrompt(projectId, state), ""];
-    for (const m of (history || []).slice(-4)) {
-      if (!m || !m.text) continue;
-      if (m.role === "user") parts.push("User: " + String(m.text).slice(0, 500));
-      else if (m.role === "assistant") parts.push("Assistant: " + String(m.text).slice(0, 700));
-    }
-    parts.push("User: " + String(message).slice(0, 1000));
-    parts.push('Assistant JSON: {"reply":');
-    return parts.join("\n");
-  },
-
   withTimeout(promise, ms) {
     return new Promise((resolve, reject) => {
       const t = setTimeout(() => reject(new Error("Таймаут " + Math.round(ms / 1000) + "с")), ms);
