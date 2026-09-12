@@ -45,30 +45,16 @@ window.BossChat = {
     if (provider === "openrouter" && !this.getKey(state)) {
       return {
         reply:
-          "Нет ключа OpenRouter.\n\n1) openrouter.ai/keys → Create key\n2) Вставь выше → «Сохранить»\n\nИли переключись на «Бесплатный» — там ключ не нужен.",
+          "Нет ключа OpenRouter.\n\n1) openrouter.ai/keys → Create key\n2) Вставь выше → «Сохранить»\n\nИли переключись на «Бесплатный» — там отдельный чат без ключа.",
         patches: [],
       };
     }
 
-    const history = (state.chat[projectId] || []).slice(-12);
-    let raw;
-    if (provider === "free") {
-      raw = await this.callFree(message, projectId, state, history);
-    } else {
-      try {
-        raw = await this.callOpenRouter(message, projectId, state, history);
-      } catch (e) {
-        // Ключ ок, модели OpenRouter отвалились → отвечаем через бесплатный канал
-        try {
-          raw = await this.callFree(message, projectId, state, history);
-          raw =
-            String(raw || "") +
-            "\n\n(Ответ через бесплатный канал: OpenRouter сейчас не отдал модель.)";
-        } catch (_) {
-          throw e;
-        }
-      }
-    }
+    const history = Store.getChat(state, projectId, provider).slice(-12);
+    const raw =
+      provider === "free"
+        ? await this.callFree(message, projectId, state, history)
+        : await this.callOpenRouter(message, projectId, state, history);
     const parsed = this.parseModelJson(raw);
     parsed.patches = this.sanitizePatches(parsed.patches || [], projectId, message);
     return parsed;
@@ -155,7 +141,7 @@ ${JSON.stringify(
 
   async callOpenRouter(message, projectId, state, history) {
     const key = this.getKey(state);
-    const models = this.openRouterModels(state);
+    const models = this.openRouterModels(state).slice(0, 5);
     const messages = this.buildMessages(message, projectId, state, history);
     const tried = new Set();
     let lastErr = null;
@@ -178,22 +164,39 @@ ${JSON.stringify(
     throw lastErr || new Error("Все модели OpenRouter недоступны сейчас");
   },
 
+  async fetchTimeout(url, options, ms) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), ms || 35000);
+    try {
+      return await fetch(url, { ...options, signal: ctrl.signal });
+    } catch (e) {
+      if (e && e.name === "AbortError") throw new Error("Таймаут ответа модели (" + Math.round((ms || 35000) / 1000) + "с)");
+      throw e;
+    } finally {
+      clearTimeout(timer);
+    }
+  },
+
   async requestOpenRouter(key, model, messages) {
-    const res = await fetch(this.OPENROUTER.endpoint, {
-      method: "POST",
-      headers: {
-        Authorization: "Bearer " + key,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://yanmag933.github.io/bigbossyan/",
-        "X-Title": "BigBossYan",
+    const res = await this.fetchTimeout(
+      this.OPENROUTER.endpoint,
+      {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + key,
+          "Content-Type": "application/json",
+          "HTTP-Referer": "https://yanmag933.github.io/bigbossyan/",
+          "X-Title": "BigBossYan",
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          temperature: 0.55,
+          max_tokens: 1400,
+        }),
       },
-      body: JSON.stringify({
-        model,
-        messages,
-        temperature: 0.55,
-        max_tokens: 1400,
-      }),
-    });
+      40000
+    );
 
     const detail = await res.text();
     if (!res.ok) {
@@ -246,18 +249,22 @@ ${JSON.stringify(
   },
 
   async requestFree(model, messages) {
-    const res = await fetch(this.FREE.endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Referer: "https://yanmag933.github.io/bigbossyan/",
+    const res = await this.fetchTimeout(
+      this.FREE.endpoint,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Referer: "https://yanmag933.github.io/bigbossyan/",
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          temperature: 0.55,
+        }),
       },
-      body: JSON.stringify({
-        model,
-        messages,
-        temperature: 0.55,
-      }),
-    });
+      45000
+    );
 
     const detail = await res.text();
     if (!res.ok) {

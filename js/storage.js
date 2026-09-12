@@ -59,12 +59,25 @@ window.Store = {
     });
     if (state.tab === "boss") state.tab = "chat";
     if (state.ai) {
-      // Всегда сбрасываем устаревшие модели OpenRouter
       state.ai.openrouterModel = "openrouter/free";
       if (state.ai.provider === "gemini") state.ai.provider = "openrouter";
       if (!state.ai.provider || state.ai.provider === "pollinations") state.ai.provider = "free";
       if (state.ai.apiKey && /^AIza/i.test(state.ai.apiKey)) {
         state.ai.apiKey = "";
+      }
+    }
+
+    // Старые чаты были одним списком → переносим в «Бесплатный», OpenRouter пустой
+    if (!state.chat || typeof state.chat !== "object") state.chat = {};
+    for (const pid of ["lifeRpg", "trailOn"]) {
+      const bucket = state.chat[pid];
+      if (Array.isArray(bucket)) {
+        state.chat[pid] = { free: bucket, openrouter: [] };
+      } else if (!bucket || typeof bucket !== "object") {
+        state.chat[pid] = { free: [], openrouter: [] };
+      } else {
+        if (!Array.isArray(bucket.free)) bucket.free = [];
+        if (!Array.isArray(bucket.openrouter)) bucket.openrouter = [];
       }
     }
   },
@@ -78,7 +91,10 @@ window.Store = {
       overrides: { lifeRpg: {}, trailOn: {} },
       wins: [],
       installDismissed: false,
-      chat: { lifeRpg: [], trailOn: [] },
+      chat: {
+        lifeRpg: { free: [], openrouter: [] },
+        trailOn: { free: [], openrouter: [] },
+      },
       ai: {
         provider: "free",
         apiKey: "",
@@ -86,6 +102,34 @@ window.Store = {
       },
       docs: { audience: "investor", lastFile: null },
     };
+  },
+
+  chatProvider(state) {
+    const p = String((state && state.ai && state.ai.provider) || "free").toLowerCase();
+    return p === "openrouter" || p === "gemini" ? "openrouter" : "free";
+  },
+
+  ensureChat(state, projectId) {
+    if (!state.chat) state.chat = {};
+    if (!state.chat[projectId] || Array.isArray(state.chat[projectId])) {
+      const legacy = Array.isArray(state.chat[projectId]) ? state.chat[projectId] : [];
+      state.chat[projectId] = { free: legacy, openrouter: [] };
+    }
+    if (!Array.isArray(state.chat[projectId].free)) state.chat[projectId].free = [];
+    if (!Array.isArray(state.chat[projectId].openrouter)) state.chat[projectId].openrouter = [];
+    return state.chat[projectId];
+  },
+
+  getChat(state, projectId, provider) {
+    const bucket = this.ensureChat(state, projectId);
+    const key = provider === "openrouter" ? "openrouter" : "free";
+    return bucket[key];
+  },
+
+  setChat(state, projectId, provider, messages) {
+    const bucket = this.ensureChat(state, projectId);
+    const key = provider === "openrouter" ? "openrouter" : "free";
+    bucket[key] = messages;
   },
 
   save(state) {

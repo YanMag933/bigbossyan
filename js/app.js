@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const VER = "10";
+  const VER = "11";
   let state = Store.load();
   let deferredPrompt = null;
   let chatBusy = false;
@@ -351,27 +351,28 @@
 
   function renderChat() {
     const p = project();
-    const msgs = (state.chat[p.id] || []).slice(-40);
     const provider = BossChat.provider(state);
     const isFree = provider === "free";
+    const msgs = Store.getChat(state, p.id, provider).slice(-40);
     const hasKey = BossChat.hasKey(state);
     const keyValue = (state.ai && (state.ai.apiKey || state.ai.openrouterKey)) || "";
+    const chatLabel = isFree ? "Бесплатный" : "OpenRouter";
     return `
       ${projectSwitchHtml()}
       <div class="hero-block">
         <h2 style="font-size:clamp(22px,6.5vw,30px)">Чат босса</h2>
-        <p>OpenRouter по ключу или бесплатный канал без регистрации.</p>
+        <p>Два отдельных чата — переключай ИИ и сравнивай ответы.</p>
       </div>
 
       <div class="panel">
-        <div class="tiny muted" style="margin-bottom:8px">ИИ</div>
+        <div class="tiny muted" style="margin-bottom:8px">ИИ / чат</div>
         <div class="seg" id="ai-provider">
           <button type="button" class="seg-btn ${!isFree ? "active" : ""}" data-ai-provider="openrouter">OpenRouter</button>
           <button type="button" class="seg-btn ${isFree ? "active" : ""}" data-ai-provider="free">Бесплатный</button>
         </div>
         ${
           isFree
-            ? `<p class="small muted" style="margin:12px 0 0;line-height:1.45">Ключ не нужен — пиши сразу. Может быть медленнее и с лимитом.</p>`
+            ? `<p class="small muted" style="margin:12px 0 0;line-height:1.45">Чат «Бесплатный»: без ключа. История не смешивается с OpenRouter.</p>`
             : `<label class="field" style="margin-top:12px">Ключ OpenRouter
           <textarea id="ai-key" rows="3" placeholder="Вставь сюда sk-or-… (можно длинно)" autocomplete="off" spellcheck="false" style="resize:vertical;min-height:72px;font-family:ui-monospace,monospace;font-size:13px;line-height:1.35">${esc(keyValue)}</textarea>
         </label>
@@ -382,13 +383,14 @@
         <p class="small muted" style="margin:10px 0 0;line-height:1.45">
           ${
             hasKey
-              ? "Ключ сохранён. Модель видит прайс, прогресс и историю."
-              : "На openrouter.ai создай ключ → Copy. Если Copy не жмётся: Create new key ещё раз, сразу жми Copy, потом сюда «Вставить». Или останься на «Бесплатный»."
+              ? "Чат «OpenRouter»: ключ сохранён. История отдельно от бесплатного."
+              : "Нужен ключ openrouter.ai/keys — или переключись на чат «Бесплатный»."
           }
         </p>`
         }
       </div>
 
+      <div class="section-title">Чат · ${esc(chatLabel)}</div>
       <div class="chat-box panel" id="chat-box">
         ${
           msgs.length
@@ -403,8 +405,8 @@
                 .join("")
             : `<div class="empty">${
                 hasKey
-                  ? "Спроси по делу: «предложи 3 варианта цены Стандарт и почему» — план сам не тронет, пока не скажешь «примени…»."
-                  : "Сохрани ключ OpenRouter или включи «Бесплатный»."
+                  ? "Пустой чат «" + chatLabel + "». Задай тот же вопрос в обоих чатах и сравни."
+                  : "Сохрани ключ или открой чат «Бесплатный»."
               }</div>`
         }
         ${chatBusy ? '<div class="bubble bot"><div class="bubble-text">Думаю над ответом…</div></div>' : ""}
@@ -417,7 +419,7 @@
 
       <div class="section-title">Сброс</div>
       <div class="panel">
-        <button type="button" class="btn secondary block" id="clear-chat">Очистить чат проекта</button>
+        <button type="button" class="btn secondary block" id="clear-chat">Очистить чат «${esc(chatLabel)}»</button>
         <button type="button" class="btn secondary block" id="reset-btn" style="margin-top:8px">Сбросить весь прогресс</button>
       </div>
     `;
@@ -508,8 +510,9 @@
       return;
     }
     const pid = state.activeProject;
-    if (!state.chat[pid]) state.chat[pid] = [];
-    state.chat[pid].push({ role: "user", text: msg, at: Date.now() });
+    const provider = BossChat.provider(state);
+    const thread = Store.getChat(state, pid, provider);
+    thread.push({ role: "user", text: msg, at: Date.now(), provider });
     chatBusy = true;
     save();
     render();
@@ -517,18 +520,20 @@
     try {
       const result = await BossChat.ask(msg, pid, state);
       const applied = ProjectLive.applyPatches(state, result.patches || []);
-      state.chat[pid].push({
+      thread.push({
         role: "assistant",
         text: result.reply,
         applied,
         at: Date.now(),
+        provider,
       });
-      if (state.chat[pid].length > 60) state.chat[pid] = state.chat[pid].slice(-60);
+      if (thread.length > 60) Store.setChat(state, pid, provider, thread.slice(-60));
     } catch (e) {
-      state.chat[pid].push({
+      thread.push({
         role: "assistant",
         text: "Не получилось достучаться до модели: " + String(e.message || e),
         at: Date.now(),
+        provider,
       });
     }
     chatBusy = false;
@@ -635,7 +640,8 @@
     const clearChat = document.getElementById("clear-chat");
     if (clearChat) {
       clearChat.addEventListener("click", () => {
-        state.chat[state.activeProject] = [];
+        const provider = BossChat.provider(state);
+        Store.setChat(state, state.activeProject, provider, []);
         save();
         render();
       });
