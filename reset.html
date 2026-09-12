@@ -45,16 +45,16 @@
             const keys = await caches.keys();
             await Promise.all(keys.map((k) => caches.delete(k)));
           }
-          localStorage.setItem("bigbossyan-ver", "20");
+          localStorage.setItem("bigbossyan-ver", "21");
           document.getElementById("msg").textContent = "Готово. Открываю приложение…";
           setTimeout(() => {
-            location.replace("./index.html?v=20&t=" + Date.now());
+            location.replace("./index.html?v=21&t=" + Date.now());
           }, 400);
         } catch (e) {
           document.getElementById("msg").textContent =
             "Не удалось автоматически. Очисти данные сайта вручную в настройках браузера.";
           const a = document.createElement("a");
-          a.href = "./index.html?v=20&t=" + Date.now();
+          a.href = "./index.html?v=21&t=" + Date.now();
           a.textContent = "Открыть приложение";
           document.body.appendChild(a);
         }
