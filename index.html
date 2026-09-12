@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#070707" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="description" content="BigBossYan — бизнес-помощник: план, to-do, прогресс и аналитика по Life RPG и OnboardOps" />
+    <title>BigBossYan</title>
+    <link rel="manifest" href="manifest.json" />
+    <link rel="icon" href="icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="assets/logo-icon.png" />
+    <link rel="stylesheet" href="css/fonts.css?v=1" />
+    <link rel="stylesheet" href="css/styles.css?v=1" />
+    <script>
+      (function () {
+        var VER = "1";
+        try {
+          if (localStorage.getItem("bigbossyan-ver") === VER) return;
+          localStorage.setItem("bigbossyan-ver", VER);
+          if (!("serviceWorker" in navigator)) return;
+          navigator.serviceWorker.getRegistrations().then(function (regs) {
+            return Promise.all(regs.map(function (r) { return r.unregister(); })).then(function () {
+              return caches.keys();
+            }).then(function (keys) {
+              return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+            }).then(function () {
+              location.replace("./reset.html");
+            });
+          });
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="shell" class="shell">
+      <header class="topbar">
+        <div class="brand-lockup">
+          <img class="brand-mark" src="assets/logo-icon.png" width="44" height="44" alt="BigBossYan" />
+          <div class="brand-text">
+            <p class="eyebrow">BigBossYan</p>
+            <h1 id="top-title" class="page-heading">Штаб</h1>
+          </div>
+        </div>
+        <button type="button" id="install-btn" class="btn ghost" hidden>Установить</button>
+      </header>
+
+      <main id="app" class="content" aria-live="polite"></main>
+
+      <nav id="bottom-nav" class="bottom-nav" aria-label="Разделы">
+        <button type="button" class="nav-btn active" data-tab="hq">
+          <span class="nav-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M4 19V9l8-5 8 5v10"/><path d="M9 19v-6h6v6"/></svg>
+          </span>
+          <span>Штаб</span>
+        </button>
+        <button type="button" class="nav-btn" data-tab="plan">
+          <span class="nav-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M9 6h11"/><path d="M9 12h11"/><path d="M9 18h11"/><circle cx="5" cy="6" r="1" fill="currentColor" stroke="none"/><circle cx="5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="5" cy="18" r="1" fill="currentColor" stroke="none"/></svg>
+          </span>
+          <span>План</span>
+        </button>
+        <button type="button" class="nav-btn" data-tab="analytics">
+          <span class="nav-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M4 19V9"/><path d="M10 19V5"/><path d="M16 19v-7"/><path d="M22 19H2"/></svg>
+          </span>
+          <span>Аналитика</span>
+        </button>
+        <button type="button" class="nav-btn" data-tab="boss">
+          <span class="nav-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M12 3l2.2 4.5L19 8.2l-3.5 3.4.8 4.9L12 14.8 7.7 16.5l.8-4.9L5 8.2l4.8-.7L12 3z"/></svg>
+          </span>
+          <span>Советы</span>
+        </button>
+      </nav>
+    </div>
+
+    <script src="js/data.js?v=1"></script>
+    <script src="js/storage.js?v=1"></script>
+    <script src="js/app.js?v=1"></script>
+  </body>
+</html>

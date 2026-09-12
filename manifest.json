@@ -1,0 +1,25 @@
+{
+  "name": "BigBossYan",
+  "short_name": "BigBossYan",
+  "description": "Бизнес-помощник: план, to-do, прогресс и аналитика по Life RPG и OnboardOps",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#070707",
+  "theme_color": "#070707",
+  "lang": "ru",
+  "icons": [
+    {
+      "src": "assets/logo-icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
