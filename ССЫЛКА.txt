@@ -1,0 +1,8 @@
+ССЫЛКА ПРИЛОЖЕНИЯ:
+https://yanmag933.github.io/bigbossyan/
+
+РЕПОЗИТОРИЙ:
+https://github.com/YanMag933/bigbossyan
+
+ОБНОВИТЬ КЭШ (после новой версии):
+https://yanmag933.github.io/bigbossyan/reset.html

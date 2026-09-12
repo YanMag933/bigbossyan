@@ -6,16 +6,16 @@
     <meta name="theme-color" content="#070707" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="description" content="BigBossYan — бизнес-помощник: план, to-do, прогресс и аналитика по Life RPG и OnboardOps" />
+    <meta name="description" content="BigBossYan — бизнес-помощник: план, чат, документы по Life RPG и TrailOn" />
     <title>BigBossYan</title>
     <link rel="manifest" href="manifest.json" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="assets/logo-icon.png" />
-    <link rel="stylesheet" href="css/fonts.css?v=1" />
-    <link rel="stylesheet" href="css/styles.css?v=1" />
+    <link rel="stylesheet" href="css/fonts.css?v=2" />
+    <link rel="stylesheet" href="css/styles.css?v=2" />
     <script>
       (function () {
-        var VER = "1";
+        var VER = "2";
         try {
           if (localStorage.getItem("bigbossyan-ver") === VER) return;
           localStorage.setItem("bigbossyan-ver", VER);
@@ -65,19 +65,29 @@
           <span class="nav-ico" aria-hidden="true">
             <svg viewBox="0 0 24 24"><path d="M4 19V9"/><path d="M10 19V5"/><path d="M16 19v-7"/><path d="M22 19H2"/></svg>
           </span>
-          <span>Аналитика</span>
+          <span>Аналит.</span>
         </button>
-        <button type="button" class="nav-btn" data-tab="boss">
+        <button type="button" class="nav-btn" data-tab="chat">
           <span class="nav-ico" aria-hidden="true">
-            <svg viewBox="0 0 24 24"><path d="M12 3l2.2 4.5L19 8.2l-3.5 3.4.8 4.9L12 14.8 7.7 16.5l.8-4.9L5 8.2l4.8-.7L12 3z"/></svg>
+            <svg viewBox="0 0 24 24"><path d="M5 6h14v9H8l-3 3V6z"/></svg>
           </span>
-          <span>Советы</span>
+          <span>Чат</span>
+        </button>
+        <button type="button" class="nav-btn" data-tab="docs">
+          <span class="nav-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/></svg>
+          </span>
+          <span>Док</span>
         </button>
       </nav>
     </div>
 
-    <script src="js/data.js?v=1"></script>
-    <script src="js/storage.js?v=1"></script>
-    <script src="js/app.js?v=1"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <script src="js/data.js?v=2"></script>
+    <script src="js/storage.js?v=2"></script>
+    <script src="js/project.js?v=2"></script>
+    <script src="js/chat.js?v=2"></script>
+    <script src="js/docs.js?v=2"></script>
+    <script src="js/app.js?v=2"></script>
   </body>
 </html>

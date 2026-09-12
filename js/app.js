@@ -1,9 +1,12 @@
 (function () {
   "use strict";
 
-  const VER = "1";
+  const VER = "2";
   let state = Store.load();
   let deferredPrompt = null;
+  let chatBusy = false;
+  let lastDoc = null;
+  let docsBusy = false;
 
   const app = document.getElementById("app");
   const topTitle = document.getElementById("top-title");
@@ -14,11 +17,12 @@
     hq: "Штаб",
     plan: "План",
     analytics: "Аналитика",
-    boss: "Советы",
+    chat: "Чат",
+    docs: "Документ",
   };
 
   function project() {
-    return BossData.projects[state.activeProject];
+    return ProjectLive.get(state.activeProject, state);
   }
 
   function save() {
@@ -41,11 +45,8 @@
   function toggleTask(taskId) {
     const pid = state.activeProject;
     if (!state.done[pid]) state.done[pid] = {};
-    if (state.done[pid][taskId]) {
-      delete state.done[pid][taskId];
-    } else {
-      state.done[pid][taskId] = Date.now();
-    }
+    if (state.done[pid][taskId]) delete state.done[pid][taskId];
+    else state.done[pid][taskId] = Date.now();
     save();
     render();
   }
@@ -83,15 +84,15 @@
   }
 
   function projectSwitchHtml() {
-    const a = BossData.projects.lifeRpg;
-    const b = BossData.projects.onboardOps;
+    const a = ProjectLive.get("lifeRpg", state);
+    const b = ProjectLive.get("trailOn", state);
     return `
       <div class="project-switch" role="tablist" aria-label="Проекты">
         <button type="button" class="project-btn ${state.activeProject === "lifeRpg" ? "active" : ""}" data-project="lifeRpg">
           <strong>${esc(a.name)}</strong>
           <span>${esc(a.short)}</span>
         </button>
-        <button type="button" class="project-btn ${state.activeProject === "onboardOps" ? "active" : ""}" data-project="onboardOps">
+        <button type="button" class="project-btn ${state.activeProject === "trailOn" ? "active" : ""}" data-project="trailOn">
           <strong>${esc(b.name)}</strong>
           <span>${esc(b.short)}</span>
         </button>
@@ -114,7 +115,7 @@
     const p = project();
     const prog = Store.progress(p.id, state);
     const next = Store.nextTasks(p.id, state, 5);
-    const otherId = p.id === "lifeRpg" ? "onboardOps" : "lifeRpg";
+    const otherId = p.id === "lifeRpg" ? "trailOn" : "lifeRpg";
     const otherProg = Store.progress(otherId, state);
     const wins = state.wins.filter((w) => w.projectId === p.id).slice(0, 5);
     const circ = 2 * Math.PI * 44;
@@ -149,7 +150,7 @@
             <div class="tiny muted">Взвешенный прогресс плана</div>
             <div style="margin:8px 0 12px;font-size:14px;line-height:1.4">${esc(p.oneLiner)}</div>
             <div class="bar"><i style="width:${prog.pct}%"></i></div>
-            <div class="small muted" style="margin-top:8px">Второй проект: ${esc(BossData.projects[otherId].name)} — ${otherProg.pct}%</div>
+            <div class="small muted" style="margin-top:8px">Второй проект: ${esc(ProjectLive.get(otherId, state).name)} — ${otherProg.pct}%</div>
           </div>
         </div>
       </div>
@@ -159,7 +160,7 @@
         ${
           next.length
             ? next.map((t) => taskHtml(t, t.phaseTitle)).join("")
-            : '<div class="panel empty">Все задачи отмечены. Добавь победу ниже или открой Аналитику.</div>'
+            : '<div class="panel empty">Все задачи отмечены. Напиши в Чат или сгенерируй документ.</div>'
         }
       </div>
 
@@ -324,34 +325,13 @@
 
       <div class="section-title">SWOT</div>
       <div class="panel swot-grid">
-        <div class="swot-block">
-          <h4>Сильные</h4>
-          <ul>${p.swot.strengths.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
-        </div>
-        <div class="swot-block">
-          <h4>Слабые</h4>
-          <ul>${p.swot.weaknesses.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
-        </div>
-        <div class="swot-block">
-          <h4>Возможности</h4>
-          <ul>${p.swot.opportunities.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
-        </div>
-        <div class="swot-block">
-          <h4>Угрозы</h4>
-          <ul>${p.swot.threats.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
-        </div>
+        <div class="swot-block"><h4>Сильные</h4><ul>${p.swot.strengths.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>
+        <div class="swot-block"><h4>Слабые</h4><ul>${p.swot.weaknesses.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>
+        <div class="swot-block"><h4>Возможности</h4><ul>${p.swot.opportunities.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>
+        <div class="swot-block"><h4>Угрозы</h4><ul>${p.swot.threats.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>
       </div>
-    `;
-  }
 
-  function renderBoss() {
-    const p = project();
-    return `
-      ${projectSwitchHtml()}
-      <div class="hero-block">
-        <h2 style="font-size:clamp(24px,7vw,32px)">Советы босса</h2>
-        <p>Приоритеты из бизнес-планов. Высокий — делай раньше фич «для красоты».</p>
-      </div>
+      <div class="section-title">Советы</div>
       <div class="stack">
         ${p.recommendations
           .map(
@@ -366,17 +346,120 @@
           )
           .join("")}
       </div>
+    `;
+  }
+
+  function renderChat() {
+    const p = project();
+    const msgs = (state.chat[p.id] || []).slice(-40);
+    const mode = state.ai.mode || "local";
+    return `
+      ${projectSwitchHtml()}
+      <div class="hero-block">
+        <h2 style="font-size:clamp(22px,6.5vw,30px)">Чат босса</h2>
+        <p>Советы по «${esc(p.name)}». Можно попросить поменять цену или формулировку — правки сразу в плане.</p>
+      </div>
+
+      <div class="panel">
+        <div class="tiny muted" style="margin-bottom:8px">Режим ИИ</div>
+        <div class="seg" id="ai-mode">
+          <button type="button" class="seg-btn ${mode === "local" ? "active" : ""}" data-ai-mode="local">Локальный</button>
+          <button type="button" class="seg-btn ${mode === "gemini" ? "active" : ""}" data-ai-mode="gemini">Gemini</button>
+        </div>
+        <div id="gemini-settings" class="${mode === "gemini" ? "" : "is-hidden"}" style="margin-top:12px">
+          <label class="field">API-ключ Google Gemini
+            <input type="password" id="gemini-key" value="${esc(state.ai.geminiKey || "")}" placeholder="AIza…" autocomplete="off" />
+          </label>
+          <p class="small muted" style="margin:8px 0 0;line-height:1.4">Ключ хранится только на этом телефоне. В Google Cloud ограничь ключ по HTTP-referrer (твой github.io).</p>
+        </div>
+      </div>
+
+      <div class="chat-box panel" id="chat-box">
+        ${
+          msgs.length
+            ? msgs
+                .map(
+                  (m) => `
+          <div class="bubble ${m.role === "user" ? "me" : "bot"}">
+            <div class="bubble-text">${esc(m.text)}</div>
+            ${m.applied && m.applied.length ? `<div class="bubble-meta">Изменено: ${esc(m.applied.join("; "))}</div>` : ""}
+          </div>`
+                )
+                .join("")
+            : `<div class="empty">Напиши, например: «измени цену Стандарт на 12900» или «что дальше по проекту?»</div>`
+        }
+        ${chatBusy ? '<div class="bubble bot"><div class="bubble-text">Думаю…</div></div>' : ""}
+      </div>
+
+      <form class="chat-form" id="chat-form">
+        <input type="text" id="chat-input" maxlength="800" placeholder="Сообщение боссу…" autocomplete="off" ${chatBusy ? "disabled" : ""} />
+        <button type="submit" class="btn" ${chatBusy ? "disabled" : ""}>→</button>
+      </form>
+
       <div class="section-title">Сброс</div>
       <div class="panel">
-        <p class="small muted" style="margin:0 0 12px;line-height:1.4">Данные только на этом устройстве (localStorage). Сброс очистит галочки, заметки и победы.</p>
-        <button type="button" class="btn secondary block" id="reset-btn">Сбросить прогресс</button>
+        <button type="button" class="btn secondary block" id="reset-btn">Сбросить прогресс и чат</button>
+      </div>
+    `;
+  }
+
+  function renderDocs() {
+    const p = project();
+    const aud = state.docs.audience || "investor";
+    const list = Object.values(BossDocs.audiences);
+    return `
+      ${projectSwitchHtml()}
+      <div class="hero-block">
+        <h2 style="font-size:clamp(22px,6.5vw,30px)">Документ</h2>
+        <p>Word по актуальным ценам, прогрессу и победам. Три аудитории — три разных текста.</p>
+      </div>
+
+      <div class="panel">
+        <div class="tiny muted" style="margin-bottom:8px">Для кого</div>
+        <div class="seg" id="doc-audience">
+          ${list
+            .map(
+              (a) => `
+            <button type="button" class="seg-btn ${aud === a.id ? "active" : ""}" data-audience="${esc(a.id)}">
+              ${esc(a.title)}
+            </button>`
+            )
+            .join("")}
+        </div>
+        <p class="small muted" style="margin:12px 0 0;line-height:1.4">${esc(BossDocs.audiences[aud].subtitle)} · проект «${esc(p.name)}»</p>
+      </div>
+
+      <div class="panel">
+        <button type="button" class="btn block" id="doc-generate" ${docsBusy ? "disabled" : ""}>
+          ${docsBusy ? "Собираю Word…" : "Сгенерировать .docx"}
+        </button>
+        ${
+          lastDoc
+            ? `<div class="stack" style="margin-top:12px">
+                <p class="small" style="margin:0;line-height:1.4">Готово: <strong>${esc(lastDoc.filename)}</strong></p>
+                <button type="button" class="btn secondary block" id="doc-download">Скачать</button>
+                <button type="button" class="btn secondary block" id="doc-share">Поделиться / мессенджер</button>
+                <a class="btn ghost block" id="doc-mail" href="${BossDocs.mailtoLink(lastDoc.title)}" style="text-align:center;text-decoration:none">Открыть почту</a>
+                <p class="tiny muted" style="margin:0;line-height:1.4;text-transform:none;letter-spacing:0">На iPhone «Поделиться» откроет Telegram / Max / Files. Письмо — приложи файл вручную.</p>
+              </div>`
+            : ""
+        }
+      </div>
+
+      <div class="section-title">Что попадёт внутрь</div>
+      <div class="panel">
+        <ul class="doc-preview">
+          <li>Название и позиция проекта</li>
+          <li>Прайс и юнит (включая твои правки из чата)</li>
+          <li>Прогресс плана ${Store.progress(p.id, state).pct}%</li>
+          <li>Победы и следующий шаг под аудиторию</li>
+        </ul>
       </div>
     `;
   }
 
   function render() {
-    const titles = TAB_TITLES;
-    topTitle.textContent = titles[state.tab] || "Штаб";
+    topTitle.textContent = TAB_TITLES[state.tab] || "Штаб";
     nav.querySelectorAll(".nav-btn").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.tab === state.tab);
     });
@@ -385,10 +468,64 @@
     if (state.tab === "hq") html = renderHq();
     else if (state.tab === "plan") html = renderPlan();
     else if (state.tab === "analytics") html = renderAnalytics();
-    else html = renderBoss();
+    else if (state.tab === "chat") html = renderChat();
+    else html = renderDocs();
 
     app.innerHTML = html;
     bindView();
+
+    if (state.tab === "chat") {
+      const box = document.getElementById("chat-box");
+      if (box) box.scrollTop = box.scrollHeight;
+    }
+  }
+
+  async function sendChat(text) {
+    const msg = (text || "").trim();
+    if (!msg || chatBusy) return;
+    const pid = state.activeProject;
+    if (!state.chat[pid]) state.chat[pid] = [];
+    state.chat[pid].push({ role: "user", text: msg, at: Date.now() });
+    chatBusy = true;
+    save();
+    render();
+
+    try {
+      const result = await BossChat.ask(msg, pid, state, state.ai);
+      const applied = ProjectLive.applyPatches(state, result.patches || []);
+      state.chat[pid].push({
+        role: "assistant",
+        text: result.reply,
+        applied,
+        at: Date.now(),
+      });
+      if (state.chat[pid].length > 60) state.chat[pid] = state.chat[pid].slice(-60);
+    } catch (e) {
+      state.chat[pid].push({
+        role: "assistant",
+        text: "Ошибка: " + String(e.message || e),
+        at: Date.now(),
+      });
+    }
+    chatBusy = false;
+    save();
+    render();
+  }
+
+  async function generateDoc() {
+    if (docsBusy) return;
+    docsBusy = true;
+    render();
+    try {
+      const out = await BossDocs.createDocxBlob(state.activeProject, state.docs.audience || "investor", state);
+      lastDoc = out;
+      state.docs.lastFile = out.filename;
+      save();
+    } catch (e) {
+      alert("Не удалось собрать документ: " + String(e.message || e));
+    }
+    docsBusy = false;
+    render();
   }
 
   function bindView() {
@@ -413,22 +550,72 @@
 
     const notes = document.getElementById("notes");
     if (notes) {
-      notes.addEventListener("change", () => {
+      const persist = () => {
         state.notes[state.activeProject] = notes.value;
+        save();
+      };
+      notes.addEventListener("change", persist);
+      notes.addEventListener("blur", persist);
+    }
+
+    app.querySelectorAll("[data-ai-mode]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        state.ai.mode = btn.dataset.aiMode;
+        save();
+        render();
+      });
+    });
+
+    const geminiKey = document.getElementById("gemini-key");
+    if (geminiKey) {
+      geminiKey.addEventListener("change", () => {
+        state.ai.geminiKey = geminiKey.value.trim();
         save();
       });
-      notes.addEventListener("blur", () => {
-        state.notes[state.activeProject] = notes.value;
+    }
+
+    const chatForm = document.getElementById("chat-form");
+    if (chatForm) {
+      chatForm.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const input = document.getElementById("chat-input");
+        sendChat(input && input.value);
+      });
+    }
+
+    app.querySelectorAll("[data-audience]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        state.docs.audience = btn.dataset.audience;
         save();
+        render();
+      });
+    });
+
+    const gen = document.getElementById("doc-generate");
+    if (gen) gen.addEventListener("click", () => generateDoc());
+
+    const dl = document.getElementById("doc-download");
+    if (dl && lastDoc) {
+      dl.addEventListener("click", () => BossDocs.downloadBlob(lastDoc.blob, lastDoc.filename));
+    }
+    const share = document.getElementById("doc-share");
+    if (share && lastDoc) {
+      share.addEventListener("click", async () => {
+        try {
+          await BossDocs.share(lastDoc.blob, lastDoc.filename, lastDoc.title);
+        } catch (e) {
+          if (String(e.name) !== "AbortError") BossDocs.downloadBlob(lastDoc.blob, lastDoc.filename);
+        }
       });
     }
 
     const resetBtn = document.getElementById("reset-btn");
     if (resetBtn) {
       resetBtn.addEventListener("click", () => {
-        if (confirm("Сбросить весь прогресс BigBossYan на этом устройстве?")) {
+        if (confirm("Сбросить прогресс, победы, правки цен и чат?")) {
           Store.reset();
           state = Store.load();
+          lastDoc = null;
           render();
         }
       });

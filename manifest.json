@@ -1,7 +1,7 @@
 {
   "name": "BigBossYan",
   "short_name": "BigBossYan",
-  "description": "Бизнес-помощник: план, to-do, прогресс и аналитика по Life RPG и OnboardOps",
+  "description": "Бизнес-помощник: план, чат, документы по Life RPG и TrailOn",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",

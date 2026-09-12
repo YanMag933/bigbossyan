@@ -1,30 +1,77 @@
 window.Store = {
-  KEY: "bigbossyan-v1",
+  KEY: "bigbossyan-v2",
 
   load() {
     try {
-      const raw = localStorage.getItem(this.KEY);
+      let raw = localStorage.getItem(this.KEY);
+      if (!raw) {
+        const legacy = localStorage.getItem("bigbossyan-v1");
+        if (legacy) raw = legacy;
+      }
       if (!raw) return this.blank();
       const parsed = JSON.parse(raw);
-      return {
+      const state = {
         ...this.blank(),
         ...parsed,
         done: { ...this.blank().done, ...(parsed.done || {}) },
         notes: { ...this.blank().notes, ...(parsed.notes || {}) },
+        overrides: { ...this.blank().overrides, ...(parsed.overrides || {}) },
+        chat: { ...this.blank().chat, ...(parsed.chat || {}) },
+        ai: { ...this.blank().ai, ...(parsed.ai || {}) },
+        docs: { ...this.blank().docs, ...(parsed.docs || {}) },
       };
+      this.migrate(state);
+      return state;
     } catch {
       return this.blank();
     }
+  },
+
+  migrateBucket(obj, fromKeys, toKey) {
+    if (!obj) return;
+    for (const from of fromKeys) {
+      if (obj[from] == null) {
+        if (from !== toKey) delete obj[from];
+        continue;
+      }
+      const target = obj[toKey];
+      const targetEmpty =
+        target == null ||
+        target === "" ||
+        (Array.isArray(target) && target.length === 0) ||
+        (typeof target === "object" && !Array.isArray(target) && !Object.keys(target).length);
+      if (targetEmpty) obj[toKey] = obj[from];
+      if (from !== toKey) delete obj[from];
+    }
+  },
+
+  migrate(state) {
+    const oldIds = ["onboardOps", "smenaStart"];
+    if (oldIds.includes(state.activeProject)) state.activeProject = "trailOn";
+
+    this.migrateBucket(state.done, oldIds, "trailOn");
+    this.migrateBucket(state.notes, oldIds, "trailOn");
+    this.migrateBucket(state.overrides, oldIds, "trailOn");
+    this.migrateBucket(state.chat, oldIds, "trailOn");
+
+    (state.wins || []).forEach((w) => {
+      if (oldIds.includes(w.projectId)) w.projectId = "trailOn";
+    });
+    if (state.tab === "boss") state.tab = "chat";
   },
 
   blank() {
     return {
       activeProject: "lifeRpg",
       tab: "hq",
-      done: { lifeRpg: {}, onboardOps: {} },
-      notes: { lifeRpg: "", onboardOps: "" },
+      done: { lifeRpg: {}, trailOn: {} },
+      notes: { lifeRpg: "", trailOn: "" },
+      overrides: { lifeRpg: {}, trailOn: {} },
       wins: [],
       installDismissed: false,
+      chat: { lifeRpg: [], trailOn: [] },
+      ai: { mode: "local", geminiKey: "", model: "gemini-2.0-flash" },
+      docs: { audience: "investor", lastFile: null },
     };
   },
 
@@ -34,6 +81,7 @@ window.Store = {
 
   reset() {
     localStorage.removeItem(this.KEY);
+    localStorage.removeItem("bigbossyan-v1");
   },
 
   progress(projectId, state) {
