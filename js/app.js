@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const VER = "9";
+  const VER = "10";
   let state = Store.load();
   let deferredPrompt = null;
   let chatBusy = false;

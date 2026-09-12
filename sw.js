@@ -1,4 +1,4 @@
-const CACHE = "bigbossyan-v9";
+const CACHE = "bigbossyan-v10";
 const ASSETS = [
   "./",
   "./index.html",
@@ -47,8 +47,11 @@ self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
   if (url.origin !== self.location.origin) return;
 
-  if (url.pathname.endsWith("/sw.js") || url.pathname.endsWith("sw.js")) {
-    e.respondWith(fetch(e.request));
+  // JS/CSS всегда с сети, чтобы не залипала старая модель чата
+  if (/\.(js|css)(\?|$)/i.test(url.pathname) || /\/sw\.js$/i.test(url.pathname)) {
+    e.respondWith(
+      fetch(e.request, { cache: "no-store" }).catch(() => caches.match(e.request))
+    );
     return;
   }
 

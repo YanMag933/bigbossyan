@@ -3,20 +3,21 @@ window.BossChat = {
 
   OPENROUTER: {
     endpoint: "https://openrouter.ai/api/v1/chat/completions",
-    /** openrouter/free сам выбирает живую бесплатную модель */
-    model: "openrouter/free",
-    fallbacks: [
+    /** Актуальный список: старые deepseek*:free больше не существуют */
+    models: [
+      "openrouter/free",
       "google/gemma-4-31b-it:free",
       "nvidia/nemotron-3.5-lightning:free",
       "thinkingmachines/inkling:free",
       "poolside/laguna-s-2.1:free",
+      "nex-agi/nex-n2.5-mini:free",
       "deepseek/deepseek-chat-v3-0324",
     ],
   },
 
   FREE: {
     endpoint: "https://text.pollinations.ai/openai",
-    models: ["openai-fast", "openai", "gemini-fast", "mistral"],
+    models: ["openai-fast", "openai", "mistral", "gemini-fast"],
   },
 
   provider(state) {
@@ -50,10 +51,24 @@ window.BossChat = {
     }
 
     const history = (state.chat[projectId] || []).slice(-12);
-    const raw =
-      provider === "free"
-        ? await this.callFree(message, projectId, state, history)
-        : await this.callOpenRouter(message, projectId, state, history);
+    let raw;
+    if (provider === "free") {
+      raw = await this.callFree(message, projectId, state, history);
+    } else {
+      try {
+        raw = await this.callOpenRouter(message, projectId, state, history);
+      } catch (e) {
+        // Ключ ок, модели OpenRouter отвалились → отвечаем через бесплатный канал
+        try {
+          raw = await this.callFree(message, projectId, state, history);
+          raw =
+            String(raw || "") +
+            "\n\n(Ответ через бесплатный канал: OpenRouter сейчас не отдал модель.)";
+        } catch (_) {
+          throw e;
+        }
+      }
+    }
     const parsed = this.parseModelJson(raw);
     parsed.patches = this.sanitizePatches(parsed.patches || [], projectId, message);
     return parsed;
@@ -122,23 +137,42 @@ ${JSON.stringify(
     return messages;
   },
 
+  openRouterModels(state) {
+    const dead = /deepseek.*:free|deepseek-chat-v3-0324:free/i;
+    const preferred = String((state.ai && state.ai.openrouterModel) || "").trim();
+    const list = [];
+    if (preferred && !dead.test(preferred)) list.push(preferred);
+    for (const m of this.OPENROUTER.models) {
+      if (!list.includes(m) && !dead.test(m)) list.push(m);
+    }
+    return list.length ? list : ["openrouter/free"];
+  },
+
+  extractAltSlug(errMsg) {
+    const m = String(errMsg || "").match(/use this slug instead:\s*([a-z0-9_.:/-]+)/i);
+    return m ? m[1].trim() : "";
+  },
+
   async callOpenRouter(message, projectId, state, history) {
     const key = this.getKey(state);
-    const preferred =
-      String((state.ai && state.ai.openrouterModel) || this.OPENROUTER.model).trim() || this.OPENROUTER.model;
-    const models = [preferred].concat(this.OPENROUTER.fallbacks.filter((m) => m !== preferred));
+    const models = this.openRouterModels(state);
     const messages = this.buildMessages(message, projectId, state, history);
-
+    const tried = new Set();
     let lastErr = null;
-    for (const model of models) {
+
+    for (let i = 0; i < models.length; i++) {
+      const model = models[i];
+      if (!model || tried.has(model)) continue;
+      tried.add(model);
       try {
         return await this.requestOpenRouter(key, model, messages);
       } catch (e) {
         lastErr = e;
         const msg = String(e.message || e);
-        if (/404|rate|429|capacity|no longer|not found|insufficient|unavailable for free|Payment Required|402/i.test(msg))
-          continue;
-        throw e;
+        const alt = this.extractAltSlug(msg);
+        if (alt && !tried.has(alt)) models.push(alt);
+        // Пробуем следующую модель почти при любой ошибке провайдера
+        continue;
       }
     }
     throw lastErr || new Error("Все модели OpenRouter недоступны сейчас");
@@ -150,7 +184,7 @@ ${JSON.stringify(
       headers: {
         Authorization: "Bearer " + key,
         "Content-Type": "application/json",
-        "HTTP-Referer": location.origin || "https://yanmag933.github.io",
+        "HTTP-Referer": "https://yanmag933.github.io/bigbossyan/",
         "X-Title": "BigBossYan",
       },
       body: JSON.stringify({
@@ -166,9 +200,12 @@ ${JSON.stringify(
       let parsed = detail;
       try {
         const j = JSON.parse(detail);
-        parsed = (j.error && (j.error.message || j.error)) || detail;
+        if (j.error) {
+          if (typeof j.error === "string") parsed = j.error;
+          else parsed = j.error.message || JSON.stringify(j.error);
+        }
       } catch (_) {}
-      throw new Error(String(parsed).slice(0, 220));
+      throw new Error(String(parsed).slice(0, 280));
     }
 
     let data;
@@ -189,7 +226,6 @@ ${JSON.stringify(
 
   async callFree(message, projectId, state, history) {
     const messages = this.buildMessages(message, projectId, state, history);
-    // Укорачиваем system: бесплатный лимит часто жёсткий
     if (messages[0] && messages[0].role === "system") {
       const short = messages[0].content;
       if (short.length > 6000) messages[0].content = short.slice(0, 6000) + "\n…";
@@ -203,21 +239,18 @@ ${JSON.stringify(
         return await this.requestFree(model, payloadMessages);
       } catch (e) {
         lastErr = e;
-        const msg = String(e.message || e);
-        if (/402|429|rate|capacity|not found|404|Payment|budget/i.test(msg)) continue;
-        throw e;
+        continue;
       }
     }
-    throw lastErr || new Error("Бесплатная модель сейчас недоступна. Попробуй OpenRouter.");
+    throw lastErr || new Error("Бесплатная модель сейчас недоступна.");
   },
 
   async requestFree(model, messages) {
-    // Без Authorization — иначе Pollinations думает, что ключ есть и требует бюджет
     const res = await fetch(this.FREE.endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Referer: location.href || "https://yanmag933.github.io/bigbossyan/",
+        Referer: "https://yanmag933.github.io/bigbossyan/",
       },
       body: JSON.stringify({
         model,
@@ -243,7 +276,6 @@ ${JSON.stringify(
     try {
       data = JSON.parse(detail);
     } catch (_) {
-      // иногда приходит plain text
       if (detail && detail.trim()) return detail.trim();
       throw new Error("Кривой ответ бесплатной модели");
     }

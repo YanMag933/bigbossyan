@@ -59,11 +59,10 @@ window.Store = {
     });
     if (state.tab === "boss") state.tab = "chat";
     if (state.ai) {
+      // Всегда сбрасываем устаревшие модели OpenRouter
+      state.ai.openrouterModel = "openrouter/free";
       if (state.ai.provider === "gemini") state.ai.provider = "openrouter";
       if (!state.ai.provider || state.ai.provider === "pollinations") state.ai.provider = "free";
-      if (!state.ai.openrouterModel || /:free$|deepseek-chat-v3/i.test(String(state.ai.openrouterModel))) {
-        state.ai.openrouterModel = "openrouter/free";
-      }
       if (state.ai.apiKey && /^AIza/i.test(state.ai.apiKey)) {
         state.ai.apiKey = "";
       }
