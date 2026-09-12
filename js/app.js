@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const VER = "28";
+  const VER = "29";
   let state = Store.load();
   BossDocs.syncAll(state);
   Store.save(state);
@@ -527,14 +527,23 @@
             ? `<p class="small" style="margin:0;line-height:1.45;color:var(--gold,#d4af37)">${esc(BossChat.modelLabel(state))}</p>
                ${
                  hasKey
-                   ? `<p class="small muted" style="margin:8px 0 0;line-height:1.45">Ключ: ${esc(BossChat.keyHint(BossChat.getKey(state)))}. <button type="button" class="linkish" id="toggle-openai-key">Сменить</button></p>`
-                   : `<p class="small muted" style="margin:8px 0 0;line-height:1.45">Ключ берёшь на platform.openai.com → API keys. Деньги списываются с баланса OpenAI.</p>`
+                   ? `<p class="small muted" style="margin:8px 0 0;line-height:1.45">Ключ: ${esc(BossChat.keyHint(BossChat.getKey(state)))}. <button type="button" class="linkish" id="toggle-openai-key">Сменить</button></p>
+                      <label class="field" style="margin-top:10px">Модель
+                        <select id="openai-model-select">
+                          ${BossChat.MODELS.map(
+                            (m) =>
+                              `<option value="${esc(m)}" ${BossChat.model(state) === m ? "selected" : ""}>${esc(m)}</option>`
+                          ).join("")}
+                        </select>
+                      </label>
+                      <p class="tiny muted" style="margin:8px 0 0;line-height:1.4;text-transform:none;letter-spacing:0">Если «лимит/биллинг» — пополни OpenAI Billing. Если 404 — смени модель. VPN включи до отправки.</p>`
+                   : `<p class="small muted" style="margin:8px 0 0;line-height:1.45">Ключ: platform.openai.com → API keys. Нужен баланс в Billing. В РФ — VPN.</p>`
                }
                ${
                  showKey
                    ? `<form id="openai-key-form" class="stack" style="margin-top:12px">
                         <label class="field">OpenAI API key
-                          <input type="password" id="openai-key-input" placeholder="sk-…" autocomplete="off" maxlength="200" />
+                          <input type="password" id="openai-key-input" placeholder="sk-… или sk-proj-…" autocomplete="off" maxlength="300" />
                         </label>
                         <button type="submit" class="btn block">Сохранить ключ</button>
                       </form>`
@@ -1007,8 +1016,8 @@
         const input = document.getElementById("openai-key-input");
         const key = String((input && input.value) || "").trim();
         if (!state.ai) state.ai = {};
-        if (!/^sk-[A-Za-z0-9_\-]{20,}$/.test(key)) {
-          alert("Ключ должен начинаться с sk- и быть длинным. Возьми API key на platform.openai.com");
+        if (!/^sk-[A-Za-z0-9_\-]{16,}$/.test(key)) {
+          alert("Ключ должен начинаться с sk- или sk-proj-. Возьми API key на platform.openai.com");
           return;
         }
         state.ai.openaiKey = key;
@@ -1027,6 +1036,16 @@
       toggleKey.addEventListener("click", () => {
         if (!state.ai) state.ai = {};
         state.ai.showKeyEditor = !state.ai.showKeyEditor;
+        save();
+        render();
+      });
+    }
+
+    const modelSelect = document.getElementById("openai-model-select");
+    if (modelSelect) {
+      modelSelect.addEventListener("change", () => {
+        if (!state.ai) state.ai = {};
+        state.ai.openaiModel = modelSelect.value || "gpt-4o-mini";
         save();
         render();
       });

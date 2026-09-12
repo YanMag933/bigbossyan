@@ -846,6 +846,20 @@ label.field {
   text-transform: uppercase;
 }
 
+.field select {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 12px;
+  padding: 12px 12px;
+  color: var(--text);
+  outline: none;
+}
+
+.field select:focus {
+  border-color: rgba(212, 175, 55, 0.7);
+}
+
 .field input,
 .field textarea {
   width: 100%;

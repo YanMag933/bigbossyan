@@ -2,6 +2,7 @@ window.BossChat = {
   MIN_PRICE: 500,
   DEFAULT_MODEL: "gpt-4o-mini",
   timeoutMs: 60000,
+  MODELS: ["gpt-4o-mini", "gpt-4.1-mini", "gpt-4o", "gpt-3.5-turbo"],
 
   provider() {
     return "openai";
@@ -18,11 +19,18 @@ window.BossChat = {
 
   hasKey(state) {
     const k = this.getKey(state);
-    return /^sk-[A-Za-z0-9_\-]{20,}$/.test(k);
+    // sk-... и sk-proj-...
+    return /^sk-[A-Za-z0-9_\-]{16,}$/.test(k);
   },
 
   model(state) {
     return (state && state.ai && state.ai.openaiModel) || this.DEFAULT_MODEL;
+  },
+
+  modelQueue(state) {
+    const preferred = this.model(state);
+    const rest = this.MODELS.filter((m) => m !== preferred);
+    return [preferred].concat(rest);
   },
 
   modelLabel(state) {
@@ -34,13 +42,13 @@ window.BossChat = {
     const k = String(key || "").trim();
     if (!k) return "";
     if (k.length < 10) return k;
-    return k.slice(0, 7) + "…" + k.slice(-4);
+    return k.slice(0, 8) + "…" + k.slice(-4);
   },
 
   async ask(message, projectId, state) {
     if (!this.hasKey(state)) {
       throw new Error(
-        "Нет ключа OpenAI. Вставь API key (sk-…) ниже. В РФ обычно нужен VPN до api.openai.com."
+        "Нет ключа OpenAI. Вставь API key (sk-… / sk-proj-…) ниже. В РФ включи VPN."
       );
     }
     const history = Store.getChat(state, projectId).slice(-8);
@@ -85,7 +93,7 @@ window.BossChat = {
       "Рассуждай, сравнивай варианты, указывай риски. Не копируй базу списком — дай вывод. " +
       "Контекст проекта: " +
       JSON.stringify(slim) +
-      ' Формат ответа — строго JSON без markdown: {"reply":"текст человеку","patches":[]}. ' +
+      ' Ответ — JSON объект: {"reply":"текст человеку","patches":[]}. ' +
       "patches=[] по умолчанию; патч только если явно просят изменить план/цену."
     );
   },
@@ -94,6 +102,8 @@ window.BossChat = {
     const messages = [{ role: "system", content: this.buildSystemPrompt(projectId, state) }];
     for (const m of (history || []).slice(-6)) {
       if (!m || !m.text) continue;
+      // не тащим старые ошибки в контекст модели
+      if (m.role === "assistant" && /^Не получилось/i.test(String(m.text || ""))) continue;
       if (m.role === "user") messages.push({ role: "user", content: String(m.text).slice(0, 1000) });
       else if (m.role === "assistant") messages.push({ role: "assistant", content: String(m.text).slice(0, 1500) });
     }
@@ -117,9 +127,30 @@ window.BossChat = {
     });
   },
 
-  async callOpenAI(message, projectId, state, history) {
-    const messages = this.buildMessages(message, projectId, state, history);
-    const key = this.getKey(state);
+  mapOpenAIError(status, data, raw) {
+    const apiMsg = (data && data.error && data.error.message) || "";
+    const code = (data && data.error && (data.error.code || data.error.type)) || "";
+    const blob = (apiMsg + " " + code + " " + (raw || "")).toLowerCase();
+
+    if (status === 401) return new Error("Неверный API-ключ OpenAI. Смени ключ (Сменить).");
+    if (status === 403) {
+      return new Error("Доступ запрещён. Включи VPN и проверь, что ключ не ограничен по IP/проекту.");
+    }
+    if (status === 429) {
+      if (/insufficient_quota|billing|exceeded.*quota|payment/i.test(blob)) {
+        return new Error(
+          "На аккаунте OpenAI нет квоты/денег. Пополни Billing: platform.openai.com → Settings → Billing, подожди 1–2 мин и повтори."
+        );
+      }
+      return new Error("Слишком много запросов (rate limit). Подожди 20–40 сек и повтори.");
+    }
+    if (status === 404 || /model_not_found|does not exist|invalid model/i.test(blob)) {
+      return new Error("MODEL_404");
+    }
+    return new Error(apiMsg || "HTTP " + status);
+  },
+
+  async requestOnce(key, model, messages) {
     let res;
     try {
       res = await this.withTimeout(
@@ -130,9 +161,10 @@ window.BossChat = {
             Authorization: "Bearer " + key,
           },
           body: JSON.stringify({
-            model: this.model(state),
+            model,
             temperature: 0.55,
             messages,
+            response_format: { type: "json_object" },
           }),
           cache: "no-store",
         }),
@@ -141,9 +173,7 @@ window.BossChat = {
     } catch (e) {
       const msg = String((e && e.message) || e || "");
       if (/Таймаут/i.test(msg)) throw e;
-      throw new Error(
-        "Сеть до OpenAI не прошла. Включи VPN (доступ к api.openai.com) и повтори."
-      );
+      throw new Error("Сеть до OpenAI не прошла. Включи VPN (api.openai.com) и повтори.");
     }
 
     const raw = await res.text();
@@ -152,14 +182,7 @@ window.BossChat = {
       data = JSON.parse(raw);
     } catch (_) {}
 
-    if (!res.ok) {
-      const errMsg =
-        (data && data.error && data.error.message) || raw.slice(0, 180) || "HTTP " + res.status;
-      if (res.status === 401) throw new Error("Неверный API-ключ OpenAI.");
-      if (res.status === 429) throw new Error("Лимит OpenAI. Подожди немного или проверь биллинг.");
-      if (res.status === 403) throw new Error("Доступ запрещён. Нужен VPN или доступ к api.openai.com.");
-      throw new Error(errMsg);
-    }
+    if (!res.ok) throw this.mapOpenAIError(res.status, data, raw);
 
     const content =
       data &&
@@ -168,19 +191,53 @@ window.BossChat = {
       data.choices[0].message &&
       data.choices[0].message.content;
     if (!content || !String(content).trim()) throw new Error("Пустой ответ ChatGPT");
-    return String(content).trim();
+    return { text: String(content).trim(), model };
+  },
+
+  async callOpenAI(message, projectId, state, history) {
+    const messages = this.buildMessages(message, projectId, state, history);
+    const key = this.getKey(state);
+    const queue = this.modelQueue(state);
+    let lastErr = null;
+
+    for (const model of queue) {
+      try {
+        const out = await this.requestOnce(key, model, messages);
+        // запоминаем рабочую модель
+        if (state && state.ai && state.ai.openaiModel !== out.model) {
+          state.ai.openaiModel = out.model;
+        }
+        return out.text;
+      } catch (e) {
+        lastErr = e;
+        const msg = String((e && e.message) || e || "");
+        // модель недоступна — пробуем следующую
+        if (msg === "MODEL_404" || /MODEL_404|model_not_found|404/i.test(msg)) continue;
+        // биллинг / ключ / сеть — сразу наружу
+        throw e;
+      }
+    }
+
+    throw (
+      lastErr ||
+      new Error(
+        "Ни одна модель ChatGPT не ответила для этого ключа. В OpenAI Project проверь доступ к моделям или выбери gpt-3.5-turbo."
+      )
+    );
   },
 
   friendlyError(err) {
     const msg = String((err && err.message) || err || "");
-    if (/ключ|API key|sk-/i.test(msg)) return msg;
-    if (/VPN|api\.openai|Сеть до OpenAI/i.test(msg)) return msg;
-    if (/Таймаут/i.test(msg)) return msg + ". При VPN иногда дольше — повтори.";
-    if (/429|Лимит/i.test(msg)) return msg;
-    if (/Load failed|Failed to fetch|NetworkError/i.test(msg)) {
-      return "Сеть оборвалась. Включи VPN и проверь, что api.openai.com открывается.";
+    if (msg === "MODEL_404") {
+      return "Модель недоступна для ключа. Выбери другую модель ниже или открой доступ в OpenAI Project.";
     }
-    return msg.slice(0, 280);
+    if (/ключ|API key|sk-/i.test(msg)) return msg;
+    if (/VPN|api\.openai|Сеть до OpenAI|Billing|квот|rate limit|биллинг/i.test(msg)) return msg;
+    if (/Таймаут/i.test(msg)) return msg + ". При VPN иногда дольше — повтори.";
+    if (/Load failed|Failed to fetch|NetworkError/i.test(msg)) {
+      return "Сеть оборвалась. Включи VPN и проверь api.openai.com.";
+    }
+    return msg.slice(0, 320);
   },
 
   parseModelJson(raw) {
