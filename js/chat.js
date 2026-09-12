@@ -1,100 +1,41 @@
 window.BossChat = {
   MIN_PRICE: 500,
 
-  QWEN: {
-    label: "Qwen",
-    models: ["qwen-plus", "qwen-turbo", "qwen-flash", "qwen2.5-72b-instruct", "qwen-max"],
-    endpoints: [
-      "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions",
-      "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
-    ],
-  },
-
   FREE: {
-    label: "Бесплатный",
-    // GET text — стабильнее POST с телефона (меньше 402 / CORS сюрпризов)
-    getBases: ["https://gen.pollinations.ai/text/", "https://text.pollinations.ai/"],
-    postEndpoint: "https://gen.pollinations.ai/v1/chat/completions",
+    label: "Бесплатный ИИ",
+    getBases: [
+      "https://gen.pollinations.ai/text/",
+      "https://text.pollinations.ai/",
+    ],
+    postEndpoints: [
+      "https://gen.pollinations.ai/v1/chat/completions",
+      "https://text.pollinations.ai/openai",
+    ],
     models: ["openai", "openai-fast", "mistral"],
-    cooldownMs: 8000,
+    cooldownMs: 6000,
     lastCallAt: 0,
   },
 
-  /** Режим: qwen (ключ DashScope) или free (без ключа). */
-  mode(state) {
-    return this.getQwenKey(state) ? "qwen" : "free";
-  },
-
-  provider(state) {
-    // совместимость со старым кодом (один поток чата)
+  provider() {
     return "main";
   },
 
-  /** Убрать переносы/пробелы — с телефона ключ часто ломается на строки. */
-  normalizeKey(raw) {
-    return String(raw || "")
-      .replace(/[\s\u200b\u00a0]+/g, "")
-      .trim();
+  mode() {
+    return "free";
   },
 
-  keyHint(raw) {
-    const key = this.normalizeKey(raw);
-    if (!key) return "Вставь ключ sk-… из Model Studio → API Key.";
-    if (/^sk-or-/i.test(key)) return "Это OpenRouter. Нужен ключ Qwen/DashScope (sk-… без or).";
-    if (/^sk-ws-/i.test(key) || (key.includes(".") && key.length > 80)) {
-      return "Это не API Key. Нужен обычный ключ sk-… (короткая строка без точек), кнопка API Key / Create API Key — не кусок из Java/cURL.";
-    }
-    if (!/^sk-[A-Za-z0-9]{16,}$/.test(key)) {
-      return "Формат странный. Ожидается sk- и буквы/цифры подряд, без пробелов и переносов.";
-    }
-    return "";
-  },
-
-  getQwenKey(state) {
-    if (!state || !state.ai) return "";
-    const key = this.normalizeKey(state.ai.apiKey || state.ai.qwenKey || "");
-    if (!key) return "";
-    if (/^sk-or-/i.test(key) || /^AIza/i.test(key) || /^sk-ws-/i.test(key)) return "";
-    if (key.includes(".")) return "";
-    if (!/^sk-[A-Za-z0-9]+$/i.test(key)) return "";
-    return key;
-  },
-
-  hasKey(state) {
-    // чат всегда доступен: без ключа = бесплатный канал
+  hasKey() {
     return true;
   },
 
-  modelLabel(state) {
-    if (this.mode(state) === "qwen") {
-      const m = (state.ai && state.ai.qwenModel) || this.QWEN.models[0];
-      return "Qwen · " + m;
-    }
-    return "Бесплатный · без ключа";
+  modelLabel() {
+    return this.FREE.label;
   },
 
   async ask(message, projectId, state) {
-    const history = Store.getChat(state, projectId).slice(-10);
+    const history = Store.getChat(state, projectId).slice(-8);
     const userMsg = this.enrichUserMessage(message);
-    let raw;
-    const errors = [];
-
-    if (this.mode(state) === "qwen") {
-      try {
-        raw = await this.callQwen(userMsg, projectId, state, history);
-      } catch (e) {
-        errors.push("Qwen: " + this.friendlyError(e));
-        try {
-          raw = await this.callFree(userMsg, projectId, state, history);
-        } catch (e2) {
-          errors.push("Free: " + this.friendlyError(e2));
-          throw new Error(errors.join("\n"));
-        }
-      }
-    } else {
-      raw = await this.callFree(userMsg, projectId, state, history);
-    }
-
+    const raw = await this.callFree(userMsg, projectId, state, history);
     const parsed = this.parseModelJson(raw);
     parsed.patches = this.sanitizePatches(parsed.patches || [], projectId, message);
     return parsed;
@@ -111,53 +52,47 @@ window.BossChat = {
     if (!this.isPriceAdviceQuestion(message)) return message;
     return (
       String(message).trim() +
-      "\n\n[Важно: текущие цены в контексте — факт «как сейчас». Предложи ДРУГИЕ цифры, не копируй текущий прайс. Патчи в план не ставь.]"
+      "\n\n[Текущие цены в контексте — факт. Предложи ДРУГИЕ цифры, не копируй прайс. patches=[].]"
     );
   },
 
-  buildSystemPrompt(projectId, state, compact) {
+  buildSystemPrompt(projectId, state) {
     const ctx = window.ProjectLive.contextForAi(projectId, state);
     const slim = {
-      projectId: ctx.projectId,
       name: ctx.name,
       stage: ctx.stage,
       progressPct: ctx.progressPct,
       pricing: ctx.pricing,
-      nextTasks: (ctx.nextTasks || []).slice(0, 4),
-      notes: (ctx.notes || []).slice(0, 4),
-      recommendations: (ctx.recommendations || []).slice(0, 3),
+      nextTasks: (ctx.nextTasks || []).slice(0, 3),
+      notes: (ctx.notes || []).slice(0, 3),
     };
-
-    const base = `Ты бизнес-советник BigBossYan для основателя Яна. Отвечай по-русски, по делу.
-Контекст: ${JSON.stringify(slim)}
-Правила:
-- pricing = текущие цены (факт). «N вариантов цены» = N ДРУГИХ сценариев, не копипаст прайса.
-- patches=[] по умолчанию. Патч только если явно: измени/поставь/примени + пакет + цена (≥500₽).
-Ответ строго JSON без markdown: {"reply":"текст","patches":[]}`;
-
-    if (compact && base.length > 2200) return base.slice(0, 2200) + "…";
-    return base;
+    return (
+      "Ты бизнес-советник BigBossYan для Яна. Отвечай по-русски коротко и по делу. " +
+      "Контекст: " +
+      JSON.stringify(slim) +
+      ' Ответ строго JSON: {"reply":"текст","patches":[]}. patches только если явно просят изменить план.'
+    ).slice(0, 1800);
   },
 
-  buildMessages(message, projectId, state, history, compact) {
-    const messages = [{ role: "system", content: this.buildSystemPrompt(projectId, state, compact) }];
-    for (const m of (history || []).slice(-6)) {
+  buildMessages(message, projectId, state, history) {
+    const messages = [{ role: "system", content: this.buildSystemPrompt(projectId, state) }];
+    for (const m of (history || []).slice(-4)) {
       if (!m || !m.text) continue;
-      if (m.role === "user") messages.push({ role: "user", content: m.text });
-      else if (m.role === "assistant") messages.push({ role: "assistant", content: m.text });
+      if (m.role === "user") messages.push({ role: "user", content: String(m.text).slice(0, 500) });
+      else if (m.role === "assistant") messages.push({ role: "assistant", content: String(m.text).slice(0, 700) });
     }
-    messages.push({ role: "user", content: message });
+    messages.push({ role: "user", content: String(message).slice(0, 900) });
     return messages;
   },
 
   async fetchTimeout(url, options, ms) {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), ms || 40000);
+    const timer = setTimeout(() => ctrl.abort(), ms || 45000);
     try {
       return await fetch(url, { ...options, signal: ctrl.signal });
     } catch (e) {
       if (e && e.name === "AbortError") {
-        throw new Error("Таймаут ответа модели (" + Math.round((ms || 40000) / 1000) + "с)");
+        throw new Error("Таймаут (" + Math.round((ms || 45000) / 1000) + "с). Повтори через пару секунд.");
       }
       throw e;
     } finally {
@@ -165,112 +100,39 @@ window.BossChat = {
     }
   },
 
-  async callQwen(message, projectId, state, history) {
-    const key = this.getQwenKey(state);
-    const messages = this.buildMessages(message, projectId, state, history, false);
-    const preferred = String((state.ai && state.ai.qwenModel) || "").trim();
-    const models = [];
-    if (preferred) models.push(preferred);
-    for (const m of this.QWEN.models) if (!models.includes(m)) models.push(m);
-
-    let lastErr = null;
-    for (const endpoint of this.QWEN.endpoints) {
-      for (const model of models.slice(0, 4)) {
-        try {
-          const content = await this.requestChatCompletions(endpoint, key, model, messages);
-          state.ai.qwenModel = model;
-          state.ai.qwenEndpoint = endpoint;
-          return content;
-        } catch (e) {
-          lastErr = e;
-          const msg = String(e.message || e);
-          // неверный ключ — сразу стоп
-          if (/401|Unauthorized|invalid.*key|InvalidApiKey/i.test(msg)) throw e;
-          continue;
-        }
-      }
-    }
-    throw lastErr || new Error("Qwen сейчас недоступен");
-  },
-
-  async requestChatCompletions(endpoint, key, model, messages) {
-    const res = await this.fetchTimeout(
-      endpoint,
-      {
-        method: "POST",
-        headers: {
-          Authorization: "Bearer " + key,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model,
-          messages,
-          temperature: 0.55,
-          max_tokens: 1400,
-        }),
-      },
-      45000
-    );
-
-    const detail = await res.text();
-    if (!res.ok) {
-      let parsed = detail;
-      try {
-        const j = JSON.parse(detail);
-        parsed =
-          (j.error && (j.error.message || j.error.code || j.error)) ||
-          j.message ||
-          detail;
-      } catch (_) {}
-      throw new Error(String(parsed).slice(0, 280));
-    }
-
-    let data;
-    try {
-      data = JSON.parse(detail);
-    } catch (_) {
-      throw new Error("Кривой ответ Qwen");
-    }
-    const content =
-      data &&
-      data.choices &&
-      data.choices[0] &&
-      data.choices[0].message &&
-      data.choices[0].message.content;
-    if (!content) throw new Error("Пустой ответ Qwen");
-    return content;
-  },
-
   async callFree(message, projectId, state, history) {
     const wait = this.FREE.cooldownMs - (Date.now() - (this.FREE.lastCallAt || 0));
     if (wait > 0) {
-      throw new Error("Подожди " + Math.ceil(wait / 1000) + " сек и повтори.");
+      throw new Error("Подожди " + Math.ceil(wait / 1000) + " сек — бесплатный канал ограничивает частоту.");
     }
 
-    const messages = this.buildMessages(message, projectId, state, history, true);
-    let lastErr = null;
+    const messages = this.buildMessages(message, projectId, state, history);
+    const errors = [];
 
-    // 1) простой GET — лучше проходит с телефона
     try {
       const out = await this.requestFreeGet(messages);
       this.FREE.lastCallAt = Date.now();
       return out;
     } catch (e) {
-      lastErr = e;
+      errors.push(this.friendlyError(e));
     }
 
-    // 2) POST chat completions без ключа
-    for (const model of this.FREE.models) {
-      try {
-        const out = await this.requestFreePost(model, messages);
-        this.FREE.lastCallAt = Date.now();
-        return out;
-      } catch (e) {
-        lastErr = e;
+    for (const endpoint of this.FREE.postEndpoints) {
+      for (const model of this.FREE.models) {
+        try {
+          const out = await this.requestFreePost(endpoint, model, messages);
+          this.FREE.lastCallAt = Date.now();
+          return out;
+        } catch (e) {
+          errors.push(this.friendlyError(e));
+        }
       }
     }
 
-    throw lastErr || new Error("Бесплатный канал недоступен");
+    throw new Error(
+      errors.filter(Boolean).slice(-2).join(" · ") ||
+        "Бесплатный ИИ сейчас недоступен. Подожди минуту и попробуй снова."
+    );
   },
 
   flattenPrompt(messages) {
@@ -282,44 +144,49 @@ window.BossChat = {
       else if (m.role === "assistant") parts.push("ASSISTANT:\n" + m.content);
     }
     parts.push('Ответь одним JSON: {"reply":"...","patches":[]}');
-    return parts.join("\n\n").slice(0, 3500);
+    return parts.join("\n\n").slice(0, 3200);
   },
 
   async requestFreeGet(messages) {
     const prompt = this.flattenPrompt(messages);
     let lastErr = null;
+    const seed = String(Date.now() % 100000);
     for (const base of this.FREE.getBases) {
       for (const model of this.FREE.models) {
-        const url =
-          base +
-          encodeURIComponent(prompt) +
-          (base.includes("gen.pollinations") ? "?model=" + encodeURIComponent(model) : "");
+        let url = base + encodeURIComponent(prompt);
+        if (base.indexOf("gen.pollinations") >= 0) {
+          url += "?model=" + encodeURIComponent(model) + "&seed=" + seed;
+        } else {
+          url += "?model=" + encodeURIComponent(model);
+        }
         try {
-          const res = await this.fetchTimeout(url, { method: "GET" }, 50000);
+          const res = await this.fetchTimeout(
+            url,
+            { method: "GET", headers: { Accept: "text/plain, application/json, */*" } },
+            50000
+          );
           const text = await res.text();
-          if (!res.ok) {
-            throw new Error(String(text || res.status).slice(0, 220));
-          }
-          if (!text || !text.trim()) throw new Error("Пустой ответ");
-          return text.trim();
+          if (!res.ok) throw new Error(String(text || res.status).slice(0, 200));
+          if (!text || !String(text).trim()) throw new Error("Пустой ответ");
+          return String(text).trim();
         } catch (e) {
           lastErr = e;
         }
       }
     }
-    throw lastErr || new Error("GET free failed");
+    throw lastErr || new Error("GET failed");
   },
 
-  async requestFreePost(model, messages) {
+  async requestFreePost(endpoint, model, messages) {
     const res = await this.fetchTimeout(
-      this.FREE.postEndpoint,
+      endpoint,
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({
           model,
           messages: messages.slice(-5),
-          temperature: 0.55,
+          temperature: 0.5,
         }),
       },
       45000
@@ -331,7 +198,7 @@ window.BossChat = {
         const j = JSON.parse(detail);
         parsed = (j.error && (j.error.message || j.error)) || detail;
       } catch (_) {}
-      throw new Error(String(parsed).slice(0, 220));
+      throw new Error(String(parsed).slice(0, 200));
     }
     try {
       const data = JSON.parse(detail);
@@ -350,57 +217,16 @@ window.BossChat = {
   friendlyError(err) {
     const msg = String((err && err.message) || err || "");
     if (/402|Payment Required|budget|pollen|Insufficient/i.test(msg)) {
-      return "Лимит бесплатного канала. Подожди минуту или вставь ключ Qwen (Model Studio).";
+      return "Лимит бесплатного канала. Подожди 20–60 сек и напиши снова.";
     }
     if (/Load failed|Failed to fetch|NetworkError|network/i.test(msg)) {
-      return "Сеть оборвала запрос. Попробуй ещё раз; для Qwen иногда нужен VPN.";
+      return "Сеть оборвала запрос. Проверь интернет и повтори.";
     }
-    if (/401|Unauthorized|InvalidApiKey|invalid.*key/i.test(msg)) {
-      return "Ключ Qwen не принят. Создай новый на home.qwencloud.com → API Keys.";
+    if (/Incorrect API key|InvalidApiKey|401|Unauthorized/i.test(msg)) {
+      return "Ключ не нужен для этого чата. Обнови приложение через reset и пиши снова.";
     }
-    if (/Model not exist|not found|InvalidParameter/i.test(msg)) {
-      return "Модель недоступна на этом регионе — пробую другие автоматически. Если снова ошибка: смени ключ/регион.";
-    }
-    if (/Таймаут|подожди/i.test(msg)) return msg;
-    return msg.slice(0, 280);
-  },
-
-  keyFingerprint(key) {
-    const k = String(key || "").trim();
-    if (k.length < 12) return k;
-    return k.slice(0, 8) + "…" + k.slice(-4);
-  },
-
-  async verifyQwenKey(key) {
-    const clean = this.normalizeKey(key);
-    const hint = this.keyHint(clean);
-    if (hint && (!/^sk-[A-Za-z0-9]{16,}$/.test(clean) || /^sk-ws-/i.test(clean) || clean.includes("."))) {
-      throw new Error(hint);
-    }
-    if (!clean || !/^sk-/i.test(clean) || /^sk-or-/i.test(clean)) {
-      throw new Error("Нужен ключ DashScope / Qwen Cloud вида sk-… (не OpenRouter sk-or-)");
-    }
-
-    let lastErr = null;
-    for (const endpoint of this.QWEN.endpoints) {
-      try {
-        await this.requestChatCompletions(endpoint, clean, this.QWEN.models[0], [
-          { role: "user", content: 'Ответь строго JSON: {"reply":"ок","patches":[]}' },
-        ]);
-        return { ok: true, fingerprint: this.keyFingerprint(clean), endpoint };
-      } catch (e) {
-        lastErr = e;
-        if (/401|Unauthorized|InvalidApiKey|invalid.*key|Incorrect API key/i.test(String(e.message || e))) {
-          continue;
-        }
-      }
-    }
-    throw lastErr || new Error("Ключ не прошёл проверку");
-  },
-
-  // старое имя — чтобы не ломать вызовы в app.js
-  async verifyOpenRouterKey(key) {
-    return this.verifyQwenKey(key);
+    if (/Таймаут|Подожди/i.test(msg)) return msg;
+    return msg.slice(0, 220);
   },
 
   parseModelJson(raw) {
@@ -443,7 +269,6 @@ window.BossChat = {
   sanitizePatches(patches, projectId, userMessage) {
     if (!Array.isArray(patches) || !patches.length) return [];
     if (!this.wantsMutation(userMessage)) return [];
-
     const out = [];
     for (const p of patches) {
       if (!p || !p.op) continue;

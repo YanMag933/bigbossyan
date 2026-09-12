@@ -1,11 +1,10 @@
 (function () {
   "use strict";
 
-  const VER = "16";
+  const VER = "18";
   let state = Store.load();
   let deferredPrompt = null;
   let chatBusy = false;
-  let keyCheckBusy = false;
   let lastDoc = null;
   let docsBusy = false;
 
@@ -448,49 +447,16 @@
   function renderChat() {
     const p = project();
     const msgs = Store.getChat(state, p.id).slice(-40);
-    const keyValue = (state.ai && state.ai.apiKey) || "";
-    const mode = BossChat.mode(state);
-    const keyOk =
-      mode === "qwen" &&
-      !!keyValue &&
-      state.ai.keyOk === true &&
-      state.ai.keyFp === BossChat.keyFingerprint(keyValue);
-    const showKeyForm = !keyOk || state.ai.showKeyEditor === true;
-    const keyStatus = state.ai.keyStatus || "";
     return `
       ${projectSwitchHtml()}
       <div class="hero-block">
         <h2 style="font-size:clamp(22px,6.5vw,30px)">Чат босса</h2>
-        <p>Один чат. Без ключа — бесплатный канал. С ключом Qwen — как в Qwen Studio.</p>
+        <p>Бесплатный ИИ без ключей. Пиши вопрос — получишь совет по проекту.</p>
       </div>
 
       <div class="panel">
-        <div class="tiny muted" style="margin-bottom:8px">Сейчас: ${esc(BossChat.modelLabel(state))}</div>
-        ${
-          keyOk && !showKeyForm
-            ? `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
-                <p class="small" style="margin:0;line-height:1.45;color:var(--gold,#d4af37)">Ключ Qwen работает</p>
-                <button type="button" class="btn secondary" id="change-ai-key" style="width:auto;padding:8px 12px">Сменить</button>
-              </div>
-              <p class="small muted" style="margin:8px 0 0;line-height:1.4">${esc(state.ai.keyFp || "")}</p>
-              <p class="small muted" style="margin:8px 0 0;line-height:1.45">Ключ берётся в Model Studio / Qwen Cloud (не из приложения Studio).</p>`
-            : `<label class="field">Ключ Qwen (необязательно)
-          <textarea id="ai-key" rows="3" placeholder="Только sk-… из API Key&#10;Не Java / cURL / Python код" autocomplete="off" spellcheck="false" ${keyCheckBusy ? "disabled" : ""} style="resize:vertical;min-height:72px;font-family:ui-monospace,monospace;font-size:13px;line-height:1.35">${esc(keyValue)}</textarea>
-        </label>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
-          <button type="button" class="btn secondary block" id="paste-ai-key" ${keyCheckBusy ? "disabled" : ""}>Вставить</button>
-          <button type="button" class="btn secondary block" id="save-ai-key" ${keyCheckBusy ? "disabled" : ""}>${keyCheckBusy ? "Проверяю…" : "Сохранить"}</button>
-        </div>
-        <p class="small muted" style="margin:10px 0 0;line-height:1.45">
-          ${
-            keyCheckBusy
-              ? "Проверяю ключ Qwen…"
-              : keyStatus
-                ? esc(keyStatus)
-                : "Get API Key → Create API Key → скопируй одну строку sk-… (без точек и без кода)."
-          }
-        </p>`
-        }
+        <p class="small" style="margin:0;line-height:1.45;color:var(--gold,#d4af37)">${esc(BossChat.modelLabel())}</p>
+        <p class="small muted" style="margin:8px 0 0;line-height:1.45">Если часто писать подряд — подожди несколько секунд между сообщениями.</p>
       </div>
 
       <div class="section-title">Чат</div>
@@ -506,14 +472,14 @@
           </div>`
                 )
                 .join("")
-            : '<div class="empty">Спроси что угодно — «что делать в первую очередь?», цены, план…</div>'
+            : '<div class="empty">Спроси: «что делать в первую очередь?», про цены, воронку, план…</div>'
         }
         ${chatBusy ? '<div class="bubble bot"><div class="bubble-text">Думаю над ответом…</div></div>' : ""}
       </div>
 
       <form class="chat-form" id="chat-form">
-        <input type="text" id="chat-input" maxlength="1200" placeholder="Сообщение…" autocomplete="off" ${chatBusy || keyCheckBusy ? "disabled" : ""} />
-        <button type="submit" class="btn" ${chatBusy || keyCheckBusy ? "disabled" : ""}>→</button>
+        <input type="text" id="chat-input" maxlength="1200" placeholder="Сообщение…" autocomplete="off" ${chatBusy ? "disabled" : ""} />
+        <button type="submit" class="btn" ${chatBusy ? "disabled" : ""}>→</button>
       </form>
 
       <div class="section-title">Сброс</div>
@@ -522,57 +488,6 @@
         <button type="button" class="btn secondary block" id="reset-btn" style="margin-top:8px">Сбросить весь прогресс</button>
       </div>
     `;
-  }
-
-  async function saveAndVerifyKey(rawKey) {
-    const key = BossChat.normalizeKey(rawKey);
-    if (!key) {
-      state.ai.apiKey = "";
-      state.ai.keyOk = false;
-      state.ai.keyFp = "";
-      state.ai.keyStatus = "Без ключа — бесплатный канал.";
-      state.ai.showKeyEditor = true;
-      state.ai.provider = "auto";
-      save();
-      render();
-      return;
-    }
-    const hint = BossChat.keyHint(key);
-    if (hint && (!/^sk-[A-Za-z0-9]{16,}$/.test(key) || /^sk-ws-/i.test(key) || key.includes("."))) {
-      state.ai.apiKey = "";
-      state.ai.keyOk = false;
-      state.ai.keyFp = "";
-      state.ai.keyStatus = hint;
-      state.ai.showKeyEditor = true;
-      save();
-      render();
-      return;
-    }
-    keyCheckBusy = true;
-    state.ai.apiKey = key;
-    state.ai.provider = "auto";
-    state.ai.qwenModel = "qwen-plus";
-    state.ai.keyOk = false;
-    state.ai.keyStatus = "Проверяю ключ Qwen…";
-    state.ai.showKeyEditor = true;
-    save();
-    render();
-    try {
-      const verified = await BossChat.verifyQwenKey(key);
-      state.ai.keyOk = true;
-      state.ai.keyFp = verified.fingerprint;
-      state.ai.keyStatus = "";
-      state.ai.showKeyEditor = false;
-      if (verified.endpoint) state.ai.qwenEndpoint = verified.endpoint;
-    } catch (e) {
-      state.ai.keyOk = false;
-      state.ai.keyFp = "";
-      state.ai.keyStatus = "Ключ не прошёл: " + BossChat.friendlyError(e);
-      state.ai.showKeyEditor = true;
-    }
-    keyCheckBusy = false;
-    save();
-    render();
   }
 
   function renderDocs() {
@@ -819,46 +734,6 @@
         state.ui.editingNoteId = null;
         save();
         render();
-      });
-    }
-
-    const changeAiKey = document.getElementById("change-ai-key");
-    if (changeAiKey) {
-      changeAiKey.addEventListener("click", () => {
-        state.ai.showKeyEditor = true;
-        state.ai.keyStatus = "";
-        save();
-        render();
-      });
-    }
-
-    const pasteAiKey = document.getElementById("paste-ai-key");
-    if (pasteAiKey) {
-      pasteAiKey.addEventListener("click", async () => {
-        const input = document.getElementById("ai-key");
-        try {
-          const text = await navigator.clipboard.readText();
-          if (!text || !text.trim()) {
-            alert("Буфер пустой. Скопируй ключ sk-… в Qwen Cloud и снова «Вставить».");
-            return;
-          }
-          if (input) input.value = text.trim();
-          await saveAndVerifyKey(text.trim());
-        } catch (e) {
-          if (String(e && e.message || e).includes("Ключ")) {
-            return;
-          }
-          alert("Телефон не дал доступ к буферу. Вставь ключ вручную и жми «Сохранить».");
-          if (input) input.focus();
-        }
-      });
-    }
-
-    const saveAiKey = document.getElementById("save-ai-key");
-    if (saveAiKey) {
-      saveAiKey.addEventListener("click", async () => {
-        const input = document.getElementById("ai-key");
-        await saveAndVerifyKey(input && input.value ? input.value : "");
       });
     }
 

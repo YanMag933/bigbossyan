@@ -60,24 +60,19 @@ window.Store = {
     });
     if (state.tab === "boss") state.tab = "chat";
     if (state.ai) {
-      if (state.ai.provider === "gemini" || state.ai.provider === "openrouter" || state.ai.provider === "pollinations") {
-        state.ai.provider = "auto";
-      }
-      if (!state.ai.provider) state.ai.provider = "auto";
-      if (state.ai.apiKey && /^AIza/i.test(state.ai.apiKey)) {
-        state.ai.apiKey = "";
-        state.ai.keyOk = false;
-      }
-      // старый OpenRouter ключ больше не основной канал
-      if (state.ai.apiKey && /^sk-or-/i.test(state.ai.apiKey)) {
-        state.ai.openrouterKeyLegacy = state.ai.apiKey;
-        state.ai.apiKey = "";
-        state.ai.keyOk = false;
-        state.ai.keyFp = "";
-        state.ai.keyStatus = "Нужен ключ Qwen (sk-…), не OpenRouter.";
-        state.ai.showKeyEditor = true;
-      }
-      if (!state.ai.qwenModel) state.ai.qwenModel = "qwen-plus";
+      state.ai.provider = "free";
+      // Полностью уходим от ключей — чистим всё старое
+      state.ai.apiKey = "";
+      state.ai.qwenKey = "";
+      state.ai.openrouterKey = "";
+      state.ai.openrouterKeyLegacy = "";
+      state.ai.keyOk = false;
+      state.ai.keyFp = "";
+      state.ai.keyStatus = "";
+      state.ai.showKeyEditor = false;
+      delete state.ai.qwenModel;
+      delete state.ai.qwenEndpoint;
+      delete state.ai.openrouterModel;
     }
 
     // Один общий чат на проект (склеиваем старые free + openrouter)
@@ -143,13 +138,12 @@ window.Store = {
         trailOn: [],
       },
       ai: {
-        provider: "auto",
+        provider: "free",
         apiKey: "",
-        qwenModel: "qwen-plus",
         keyOk: false,
         keyFp: "",
         keyStatus: "",
-        showKeyEditor: true,
+        showKeyEditor: false,
       },
       ui: { notesMode: "closed", editingNoteId: null },
       docs: { audience: "investor", lastFile: null },
