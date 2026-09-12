@@ -3,16 +3,11 @@ window.BossChat = {
 
   FREE: {
     label: "Бесплатный ИИ",
-    getBases: [
-      "https://gen.pollinations.ai/text/",
-      "https://text.pollinations.ai/",
-    ],
-    postEndpoints: [
-      "https://gen.pollinations.ai/v1/chat/completions",
-      "https://text.pollinations.ai/openai",
-    ],
-    models: ["openai", "openai-fast", "mistral"],
-    cooldownMs: 6000,
+    // gen.pollinations.ai уже требует ключ; анонимно живёт text.pollinations.ai
+    getBases: ["https://text.pollinations.ai/"],
+    postEndpoints: ["https://text.pollinations.ai/openai"],
+    models: ["openai", "openai-large", "mistral"],
+    cooldownMs: 16000,
     lastCallAt: 0,
   },
 
@@ -150,15 +145,11 @@ window.BossChat = {
   async requestFreeGet(messages) {
     const prompt = this.flattenPrompt(messages);
     let lastErr = null;
-    const seed = String(Date.now() % 100000);
     for (const base of this.FREE.getBases) {
       for (const model of this.FREE.models) {
         let url = base + encodeURIComponent(prompt);
-        if (base.indexOf("gen.pollinations") >= 0) {
-          url += "?model=" + encodeURIComponent(model) + "&seed=" + seed;
-        } else {
-          url += "?model=" + encodeURIComponent(model);
-        }
+        // text.pollinations.ai принимает ?model=
+        url += (url.indexOf("?") >= 0 ? "&" : "?") + "model=" + encodeURIComponent(model);
         try {
           const res = await this.fetchTimeout(
             url,
