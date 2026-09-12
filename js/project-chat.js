@@ -190,34 +190,111 @@ window.BossProjectChat = {
     return items;
   },
 
+  detectTopic(text) {
+    const t = String(text || "").toLowerCase().replace(/ё/g, "е");
+    if (/патент|роспатент|фипс|товарн\w*\s+знак|интеллект|авторск|программ\w*\s+для\s+эвм|\bис\b|регистрац\w*\s+прав/.test(t))
+      return "ip";
+    if (/цен|прайс|тариф|пакет|сколько\s+стоит/.test(t)) return "pricing";
+    if (/юнит|марж/.test(t)) return "unit";
+    if (/прогресс|процент|сколько\s+сделан/.test(t)) return "progress";
+    if (/задач|следующ|что\s+делать|план\b/.test(t)) return "task";
+    if (/заметк/.test(t)) return "note";
+    if (/побед/.test(t)) return "win";
+    if (/воронк/.test(t)) return "funnel";
+    if (/сценар|капитал/.test(t)) return "scenario";
+    if (/рынок|tam|sam|som/.test(t)) return "market";
+    if (/портрет|персон|аудитор/.test(t)) return "persona";
+    if (/swot|силн|слаб|угроз|риск|возможност/.test(t)) return "swot";
+    if (/рекоменд/.test(t)) return "rec";
+    if (/документ|ворд|docx|меморандум|инвестор|команд|покупател|\bкп\b/.test(t)) return "doc";
+    if (/стади|этап/.test(t)) return "stage";
+    if (/слоган|позиц|one.?liner|о\s+проекте|суть/.test(t)) return "project";
+    return null;
+  },
+
   topicBoost(text, item) {
-    const t = text.toLowerCase();
+    const topic = this.detectTopic(text);
     let b = 0;
-    if (/цен|прайс|пакет|тариф|сколько/.test(t) && item.topic === "pricing") b += 8;
-    if (/юнит|марж/.test(t) && item.topic === "unit") b += 8;
-    if (/прогресс|сколько\s+сделан|процент/.test(t) && item.topic === "progress") b += 10;
-    if (/задач|следующ|план|что\s+делать/.test(t) && item.topic === "task") b += 8;
-    if (/заметк|notes/.test(t) && item.topic === "note") b += 8;
-    if (/побед/.test(t) && item.topic === "win") b += 8;
-    if (/воронк/.test(t) && item.topic === "funnel") b += 8;
-    if (/сценар/.test(t) && item.topic === "scenario") b += 8;
-    if (/рынок|tam|sam|som/.test(t) && item.topic === "market") b += 8;
-    if (/портрет|персон|аудитор/.test(t) && item.topic === "persona") b += 8;
-    if (/swot|силн|слаб|угроз|возможност/.test(t) && item.topic === "swot") b += 6;
-    if (/рекоменд|совет/.test(t) && item.topic === "rec") b += 8;
-    if (/стади|этап/.test(t) && item.topic === "stage") b += 8;
-    if (/документ|ворд|docx|меморандум|инвестор|команд|покупател|кп\b/.test(t) && item.topic === "doc") b += 12;
-    if (/патент|роспатент|фипс|товарн\w*\s+знак|интеллект|авторск|программ\w*\s+для\s+эвм|ис\b|прав\w*\s+на\s+код/.test(t) && item.topic === "ip")
-      b += 14;
-    if (/слоган|позиц|one.?liner|о\s+проекте/.test(t) && ["project", "tagline", "position", "oneLiner"].includes(item.topic))
-      b += 6;
+    if (topic && item.topic === topic) b += 20;
+    if (topic === "doc" && item.topic === "doc") {
+      const t = text.toLowerCase();
+      if (/инвестор/.test(t) && /инвестор/i.test(item.title + item.body)) b += 8;
+      if (/команд/.test(t) && /команд/i.test(item.title + item.body)) b += 8;
+      if (/покупател|кп\b/.test(t) && /(покупател|кп|коммерческ)/i.test(item.title + item.body)) b += 8;
+    }
+    // чужие темы — штраф, чтобы не засорять ответ
+    if (topic && item.topic !== topic && !(topic === "ip" && item.topic === "doc")) b -= 6;
+    if (!topic || topic !== "doc") {
+      if (item.topic === "doc" && /фрагмент/i.test(item.title)) b -= 10;
+    }
     return b;
   },
 
   search(text, projectId, state) {
     const toks = this.tokens(text);
+    const topic = this.detectTopic(text);
+    const p = window.ProjectLive.get(projectId, state);
     const items = this.index(projectId, state);
-    const scored = items
+
+    // Цельные ответы по явной теме — без свалки фрагментов
+    if (topic === "pricing") {
+      const rows = (p.analytics && p.analytics.pricing) || [];
+      return {
+        reply: ["Прайс «" + p.name + "»:", ...rows.map((r) => `• ${r.name}: ${r.price}${r.forWhom ? " — " + r.forWhom : ""}`)].join(
+          "\n"
+        ),
+        patches: null,
+      };
+    }
+    if (topic === "progress") {
+      const prog = window.Store.progress(projectId, state);
+      const next = window.Store.nextTasks(projectId, state, 3);
+      return {
+        reply: [
+          `Прогресс «${p.name}»: ${prog.pct}% (${prog.done}/${prog.total}).`,
+          `Стадия: ${p.stage}.`,
+          next.length ? "Дальше:\n" + next.map((t) => `• ${t.title}`).join("\n") : "Открытых задач нет.",
+        ].join("\n"),
+        patches: null,
+      };
+    }
+    if (topic === "ip" && p.ipRights) {
+      const ip = p.ipRights;
+      return {
+        reply: [
+          "Интеллектуальные права · " + p.name,
+          ip.summary,
+          "",
+          "Что фиксировать:",
+          ...(ip.what || []).slice(0, 4).map((x) => "• " + x),
+          "",
+          "Деньги (ориентир):",
+          ...(ip.costs || []).slice(0, 3).map((x) => "• " + x),
+          ip.note ? "\n" + ip.note : "",
+        ]
+          .filter(Boolean)
+          .join("\n"),
+        patches: null,
+      };
+    }
+    if (topic === "task") {
+      const next = window.Store.nextTasks(projectId, state, 5);
+      return {
+        reply: next.length
+          ? ["Следующие задачи:", ...next.map((t) => `• ${t.title} (${t.phaseTitle})`)].join("\n")
+          : "Открытых задач нет.",
+        patches: null,
+      };
+    }
+    if (topic === "unit") {
+      const rows = (p.analytics && p.analytics.unit) || [];
+      return {
+        reply: ["Юнит:", ...rows.map((r) => `• ${r.label}: ${r.value}`)].join("\n"),
+        patches: null,
+      };
+    }
+
+    let scored = items
       .map((item) => ({
         item,
         score: this.score(item.title + " " + item.body, toks) + this.topicBoost(text, item),
@@ -225,31 +302,47 @@ window.BossProjectChat = {
       .filter((x) => x.score > 0)
       .sort((a, b) => b.score - a.score);
 
+    if (topic) {
+      const focused = scored.filter((x) => x.item.topic === topic);
+      if (focused.length) scored = focused;
+    }
+
     if (!scored.length) {
       return {
         reply:
-          "В проекте и документах ничего близкого не нашёл.\nПопробуй: «цены», «прогресс», «документ инвестор», «заметки», «воронка».",
+          "Ничего точного не нашёл. Уточни: «цены», «прогресс», «патент», «следующие задачи», «документ инвестор».",
         patches: null,
       };
     }
 
-    // убираем дубли целых документов, если уже есть фрагменты
+    const best = scored[0].score;
+    const cutoff = Math.max(best * 0.55, best - 12);
     const seen = new Set();
     const top = [];
     for (const x of scored) {
-      const key = x.item.topic + "|" + x.item.title + "|" + String(x.item.body).slice(0, 80);
+      if (x.score < cutoff) continue;
+      // один фрагмент на документ, не пачка
+      const key =
+        x.item.topic === "doc"
+          ? "doc:" + (x.item.docId || x.item.audience || x.item.title)
+          : x.item.topic + "|" + this.short(x.item.body, 60);
       if (seen.has(key)) continue;
       seen.add(key);
       top.push(x);
-      if (top.length >= 8) break;
+      if (top.length >= (topic === "doc" ? 2 : 3)) break;
     }
 
-    const docCount = window.Store.docsList(state, projectId).length;
-    const lines = top.map((x) => `• ${x.item.title}\n  ${this.short(x.item.body, 280)}`);
+    if (top.length === 1) {
+      const it = top[0].item;
+      return {
+        reply: `${it.title}\n${this.short(it.body, 420)}`,
+        patches: null,
+      };
+    }
+
+    const lines = top.map((x) => `• ${x.item.title.replace(/\s·\sфрагмент\s+\d+/i, "")}\n  ${this.short(x.item.body, 180)}`);
     return {
-      reply: `Нашёл в «${window.ProjectLive.get(projectId, state).name}»${
-        docCount ? ` · документов в базе: ${docCount}` : ""
-      }:\n\n${lines.join("\n\n")}`,
+      reply: lines.join("\n\n"),
       patches: null,
     };
   },

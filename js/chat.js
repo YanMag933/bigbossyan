@@ -1,32 +1,51 @@
 window.BossChat = {
   MIN_PRICE: 500,
-
-  FREE: {
-    label: "Нейросеть · анализ и советы",
-    models: ["openai", "mistral", "gemini"],
-    timeoutMs: 45000,
-  },
+  DEFAULT_MODEL: "gpt-4o-mini",
+  timeoutMs: 60000,
 
   provider() {
-    return "main";
+    return "openai";
   },
 
   mode() {
-    return "neural";
+    return "chatgpt";
   },
 
-  hasKey() {
-    return true;
+  getKey(state) {
+    const k = (state && state.ai && (state.ai.openaiKey || state.ai.apiKey)) || "";
+    return String(k).trim();
   },
 
-  modelLabel() {
-    return this.FREE.label;
+  hasKey(state) {
+    const k = this.getKey(state);
+    return /^sk-[A-Za-z0-9_\-]{20,}$/.test(k);
+  },
+
+  model(state) {
+    return (state && state.ai && state.ai.openaiModel) || this.DEFAULT_MODEL;
+  },
+
+  modelLabel(state) {
+    if (!this.hasKey(state)) return "ChatGPT · нужен API-ключ OpenAI";
+    return "ChatGPT · " + this.model(state);
+  },
+
+  keyHint(key) {
+    const k = String(key || "").trim();
+    if (!k) return "";
+    if (k.length < 10) return k;
+    return k.slice(0, 7) + "…" + k.slice(-4);
   },
 
   async ask(message, projectId, state) {
+    if (!this.hasKey(state)) {
+      throw new Error(
+        "Нет ключа OpenAI. Вставь API key (sk-…) ниже. В РФ обычно нужен VPN до api.openai.com."
+      );
+    }
     const history = Store.getChat(state, projectId).slice(-8);
     const userMsg = this.enrichUserMessage(message);
-    const raw = await this.callNeural(userMsg, projectId, state, history);
+    const raw = await this.callOpenAI(userMsg, projectId, state, history);
     const parsed = this.parseModelJson(raw);
     parsed.patches = this.sanitizePatches(parsed.patches || [], projectId, message);
     return parsed;
@@ -62,13 +81,24 @@ window.BossChat = {
         : null,
     };
     return (
-      "Ты бизнес-советник BigBossYan для основателя Яна. Отвечай по-русски: анализ, приоритеты, жёсткие советы. " +
-      "Не будь поисковиком по базе — рассуждай, сравнивай варианты, предупреждай о рисках. " +
+      "Ты бизнес-советник BigBossYan для основателя Яна. Отвечай по-русски: коротко, с анализом и конкретными советами. " +
+      "Рассуждай, сравнивай варианты, указывай риски. Не копируй базу списком — дай вывод. " +
       "Контекст проекта: " +
       JSON.stringify(slim) +
       ' Формат ответа — строго JSON без markdown: {"reply":"текст человеку","patches":[]}. ' +
       "patches=[] по умолчанию; патч только если явно просят изменить план/цену."
     );
+  },
+
+  buildMessages(message, projectId, state, history) {
+    const messages = [{ role: "system", content: this.buildSystemPrompt(projectId, state) }];
+    for (const m of (history || []).slice(-6)) {
+      if (!m || !m.text) continue;
+      if (m.role === "user") messages.push({ role: "user", content: String(m.text).slice(0, 1000) });
+      else if (m.role === "assistant") messages.push({ role: "assistant", content: String(m.text).slice(0, 1500) });
+    }
+    messages.push({ role: "user", content: String(message).slice(0, 1500) });
+    return messages;
   },
 
   withTimeout(promise, ms) {
@@ -87,79 +117,70 @@ window.BossChat = {
     });
   },
 
-  async callNeural(message, projectId, state, history) {
+  async callOpenAI(message, projectId, state, history) {
     const messages = this.buildMessages(message, projectId, state, history);
-    let lastErr = null;
-
-    for (const model of this.FREE.models) {
-      try {
-        const text = await this.withTimeout(this.fetchPollinations(messages, model), this.FREE.timeoutMs);
-        if (text && text.trim()) return text.trim();
-        throw new Error("Пустой ответ модели");
-      } catch (e) {
-        lastErr = e;
-        continue;
-      }
-    }
-
-    throw lastErr || new Error("Нейросеть сейчас недоступна");
-  },
-
-  buildMessages(message, projectId, state, history) {
-    const messages = [{ role: "system", content: this.buildSystemPrompt(projectId, state) }];
-    for (const m of (history || []).slice(-4)) {
-      if (!m || !m.text) continue;
-      if (m.role === "user") messages.push({ role: "user", content: String(m.text).slice(0, 800) });
-      else if (m.role === "assistant") messages.push({ role: "assistant", content: String(m.text).slice(0, 1200) });
-    }
-    messages.push({ role: "user", content: String(message).slice(0, 1200) });
-    return messages;
-  },
-
-  async fetchPollinations(messages, model) {
-    const body = JSON.stringify({
-      messages,
-      model: model || "openai",
-      temperature: 0.55,
-    });
-
+    const key = this.getKey(state);
     let res;
     try {
-      res = await fetch("https://text.pollinations.ai/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body,
-        cache: "no-store",
-      });
+      res = await this.withTimeout(
+        fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + key,
+          },
+          body: JSON.stringify({
+            model: this.model(state),
+            temperature: 0.55,
+            messages,
+          }),
+          cache: "no-store",
+        }),
+        this.timeoutMs
+      );
     } catch (e) {
-      throw new Error("Сеть: не удалось связаться с нейросетью");
+      const msg = String((e && e.message) || e || "");
+      if (/Таймаут/i.test(msg)) throw e;
+      throw new Error(
+        "Сеть до OpenAI не прошла. Включи VPN (доступ к api.openai.com) и повтори."
+      );
     }
 
-    if (res.status === 402) throw new Error("402");
-    if (!res.ok) throw new Error("HTTP " + res.status);
-
-    const text = await res.text();
-    if (!text || !String(text).trim()) throw new Error("Пустой ответ");
-
-    // Иногда OpenAI-формат JSON
+    const raw = await res.text();
+    let data = null;
     try {
-      const obj = JSON.parse(text);
-      const choice = obj.choices && obj.choices[0] && obj.choices[0].message && obj.choices[0].message.content;
-      if (choice) return String(choice);
-      if (obj.reply) return String(obj.reply);
+      data = JSON.parse(raw);
     } catch (_) {}
 
-    return text;
+    if (!res.ok) {
+      const errMsg =
+        (data && data.error && data.error.message) || raw.slice(0, 180) || "HTTP " + res.status;
+      if (res.status === 401) throw new Error("Неверный API-ключ OpenAI.");
+      if (res.status === 429) throw new Error("Лимит OpenAI. Подожди немного или проверь биллинг.");
+      if (res.status === 403) throw new Error("Доступ запрещён. Нужен VPN или доступ к api.openai.com.");
+      throw new Error(errMsg);
+    }
+
+    const content =
+      data &&
+      data.choices &&
+      data.choices[0] &&
+      data.choices[0].message &&
+      data.choices[0].message.content;
+    if (!content || !String(content).trim()) throw new Error("Пустой ответ ChatGPT");
+    return String(content).trim();
   },
 
   friendlyError(err) {
     const msg = String((err && err.message) || err || "");
-    if (/Таймаут/i.test(msg)) return msg + ". Попробуй ещё раз — модель иногда отвечает дольше.";
-    if (/402|Payment|quota/i.test(msg)) return "Лимит бесплатной нейросети на сейчас. Подожди минуту и повтори.";
-    if (/Load failed|Failed to fetch|NetworkError|Сеть/i.test(msg)) {
-      return "Сеть оборвала запрос к нейросети. Проверь интернет и повтори.";
+    if (/ключ|API key|sk-/i.test(msg)) return msg;
+    if (/VPN|api\.openai|Сеть до OpenAI/i.test(msg)) return msg;
+    if (/Таймаут/i.test(msg)) return msg + ". При VPN иногда дольше — повтори.";
+    if (/429|Лимит/i.test(msg)) return msg;
+    if (/Load failed|Failed to fetch|NetworkError/i.test(msg)) {
+      return "Сеть оборвалась. Включи VPN и проверь, что api.openai.com открывается.";
     }
-    return msg.slice(0, 260);
+    return msg.slice(0, 280);
   },
 
   parseModelJson(raw) {
@@ -183,9 +204,7 @@ window.BossChat = {
         patches: Array.isArray(obj.patches) ? obj.patches : [],
       };
     } catch (_) {
-      // модель иногда отвечает текстом без JSON
-      const cleaned = text.replace(/^Assistant JSON:\s*/i, "").trim();
-      return { reply: cleaned || "Не разобрал ответ модели.", patches: [] };
+      return { reply: text || "Не разобрал ответ модели.", patches: [] };
     }
   },
 

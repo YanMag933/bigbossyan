@@ -64,19 +64,22 @@ window.Store = {
     });
     if (state.tab === "boss") state.tab = "chat";
     if (state.ai) {
-      state.ai.provider = "free";
-      // Полностью уходим от ключей — чистим всё старое
-      state.ai.apiKey = "";
+      state.ai.provider = "openai";
+      // Старые ключи чужих провайдеров больше не нужны
       state.ai.qwenKey = "";
       state.ai.openrouterKey = "";
       state.ai.openrouterKeyLegacy = "";
-      state.ai.keyOk = false;
-      state.ai.keyFp = "";
-      state.ai.keyStatus = "";
-      state.ai.showKeyEditor = false;
       delete state.ai.qwenModel;
       delete state.ai.qwenEndpoint;
       delete state.ai.openrouterModel;
+      // openaiKey сохраняем; apiKey → openaiKey один раз
+      if (!state.ai.openaiKey && state.ai.apiKey && /^sk-/.test(String(state.ai.apiKey))) {
+        state.ai.openaiKey = state.ai.apiKey;
+      }
+      if (state.ai.openaiKey === undefined) state.ai.openaiKey = "";
+      if (!state.ai.openaiModel) state.ai.openaiModel = "gpt-4o-mini";
+      if (state.ai.showKeyEditor === undefined) state.ai.showKeyEditor = !String(state.ai.openaiKey || "").trim();
+      state.ai.keyOk = /^sk-[A-Za-z0-9_\-]{20,}$/.test(String(state.ai.openaiKey || "").trim());
     }
 
     // Один общий чат на проект (склеиваем старые free + openrouter)
@@ -121,11 +124,12 @@ window.Store = {
     }
 
     if (!state.ui || typeof state.ui !== "object") {
-      state.ui = { notesMode: "closed", editingNoteId: null, chatMode: "ai" };
+      state.ui = { notesMode: "closed", editingNoteId: null, chatMode: "ai", docPreview: null };
     } else {
       if (!state.ui.notesMode) state.ui.notesMode = "closed";
       if (state.ui.editingNoteId === undefined) state.ui.editingNoteId = null;
       if (state.ui.chatMode !== "project") state.ui.chatMode = "ai";
+      if (state.ui.docPreview === undefined) state.ui.docPreview = null;
     }
 
     if (!state.projectChat || typeof state.projectChat !== "object") state.projectChat = {};
@@ -161,14 +165,16 @@ window.Store = {
         trailOn: [],
       },
       ai: {
-        provider: "free",
+        provider: "openai",
         apiKey: "",
+        openaiKey: "",
+        openaiModel: "gpt-4o-mini",
         keyOk: false,
         keyFp: "",
         keyStatus: "",
-        showKeyEditor: false,
+        showKeyEditor: true,
       },
-      ui: { notesMode: "closed", editingNoteId: null, chatMode: "ai" },
+      ui: { notesMode: "closed", editingNoteId: null, chatMode: "ai", docPreview: null },
       docs: { audience: "investor", lastFile: null },
     };
   },

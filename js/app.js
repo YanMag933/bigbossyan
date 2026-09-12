@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const VER = "27";
+  const VER = "28";
   let state = Store.load();
   BossDocs.syncAll(state);
   Store.save(state);
@@ -206,7 +206,7 @@
       <div class="project-switch chat-mode-switch" role="tablist" aria-label="Режим чата">
         <button type="button" class="project-btn ${mode === "ai" ? "active" : ""}" data-chat-mode="ai">
           <strong>ИИ</strong>
-          <span>нейросеть · советы</span>
+          <span>ChatGPT · советы</span>
         </button>
         <button type="button" class="project-btn ${mode === "project" ? "active" : ""}" data-chat-mode="project">
           <strong>Проект</strong>
@@ -501,10 +501,14 @@
       mode === "project"
         ? Store.getProjectChat(state, p.id).slice(-40)
         : Store.getChat(state, p.id).slice(-40);
+    const hasKey = BossChat.hasKey(state);
+    const showKey = !!(state.ai && state.ai.showKeyEditor) || !hasKey;
     const empty =
       mode === "project"
-        ? "Спроси факты: «цены», «патент», «документ инвестор». Или: «измени цену Стандарта на 10900»."
-        : "Спроси совет: «что важнее на этой неделе?», «риски оффера», «нужен ли патент?»…";
+        ? "Спроси точно: «цены», «патент», «прогресс». Или: «измени цену Стандарта на 10900»."
+        : hasKey
+          ? "Спроси совет: «что важнее на этой неделе?», «риски оффера», «нужен ли патент?»…"
+          : "Сначала вставь OpenAI API key (sk-…) — ChatGPT заработает. В РФ включи VPN.";
     return `
       ${projectSwitchHtml()}
       ${chatModeSwitchHtml()}
@@ -512,17 +516,31 @@
         <h2 style="font-size:clamp(22px,6.5vw,30px)">${mode === "project" ? "Чат проекта" : "Чат ИИ"}</h2>
         <p>${
           mode === "project"
-            ? "Глубокий поиск по плану, заметкам, Word и блоку ИС — с подтверждением правок."
-            : "Живая нейросеть: анализ, приоритеты и советы. Не поиск по базе — рассуждает."
+            ? "Точные факты из плана, Word и ИС — без лишнего шума, правки с подтверждением."
+            : "ChatGPT через OpenAI API: анализ и советы. VPN — если api.openai.com недоступен."
         }</p>
       </div>
 
       <div class="panel">
         ${
           mode === "ai"
-            ? `<p class="small" style="margin:0;line-height:1.45;color:var(--gold,#d4af37)">${esc(BossChat.modelLabel())}</p>
-               <p class="small muted" style="margin:8px 0 0;line-height:1.45">Без Puter и без регистрации. Для фактов и правок цифр в плане удобнее режим «Проект».</p>`
-            : `<p class="small muted" style="margin:0;line-height:1.45">Ищет по прайсу, плану, заметкам, SWOT, Word и патентам/ИС. Правки — только после подтверждения.</p>`
+            ? `<p class="small" style="margin:0;line-height:1.45;color:var(--gold,#d4af37)">${esc(BossChat.modelLabel(state))}</p>
+               ${
+                 hasKey
+                   ? `<p class="small muted" style="margin:8px 0 0;line-height:1.45">Ключ: ${esc(BossChat.keyHint(BossChat.getKey(state)))}. <button type="button" class="linkish" id="toggle-openai-key">Сменить</button></p>`
+                   : `<p class="small muted" style="margin:8px 0 0;line-height:1.45">Ключ берёшь на platform.openai.com → API keys. Деньги списываются с баланса OpenAI.</p>`
+               }
+               ${
+                 showKey
+                   ? `<form id="openai-key-form" class="stack" style="margin-top:12px">
+                        <label class="field">OpenAI API key
+                          <input type="password" id="openai-key-input" placeholder="sk-…" autocomplete="off" maxlength="200" />
+                        </label>
+                        <button type="submit" class="btn block">Сохранить ключ</button>
+                      </form>`
+                   : ""
+               }`
+            : `<p class="small muted" style="margin:0;line-height:1.45">Отвечает коротко по теме запроса. Правки — только после «да» / кнопки.</p>`
         }
       </div>
 
@@ -557,7 +575,55 @@
     `;
   }
 
+  function openDocPreview(audienceId) {
+    BossDocs.syncArchive(state, state.activeProject);
+    const spec = BossDocs.buildSections(state.activeProject, audienceId || state.docs.audience || "investor", state);
+    if (!state.ui) state.ui = {};
+    state.ui.docPreview = {
+      audience: audienceId || state.docs.audience || "investor",
+      title: spec.title,
+      blocks: spec.blocks || [],
+    };
+    save();
+    render();
+  }
+
+  function closeDocPreview() {
+    if (!state.ui) state.ui = {};
+    state.ui.docPreview = null;
+    save();
+    render();
+  }
+
+  function renderDocPreview(preview) {
+    const blocks = preview.blocks || [];
+    return `
+      <div class="doc-viewer">
+        <div class="doc-viewer-bar">
+          <button type="button" class="btn secondary" id="doc-preview-close">← Назад</button>
+          <button type="button" class="btn" id="doc-generate-from-preview" ${docsBusy ? "disabled" : ""}>Скачать .docx</button>
+        </div>
+        <article class="doc-viewer-paper">
+          <h2 class="doc-viewer-title">${esc(preview.title || "Документ")}</h2>
+          ${blocks
+            .map((line) => {
+              if (line === "") return "<div class='doc-gap'></div>";
+              const isHead =
+                /^\d+\.\s/.test(line) ||
+                /^(Сильные|Слабые|Возможности|Угрозы|Что регистрировать|Как сделать|Сколько стоит)/.test(line) ||
+                /Интеллектуальные права/.test(line);
+              if (isHead) return `<h3 class="doc-h">${esc(line)}</h3>`;
+              return `<p class="doc-p">${esc(line)}</p>`;
+            })
+            .join("")}
+        </article>
+      </div>`;
+  }
+
   function renderDocs() {
+    const preview = state.ui && state.ui.docPreview;
+    if (preview) return renderDocPreview(preview);
+
     const p = project();
     const aud = state.docs.audience || "investor";
     const list = Object.values(BossDocs.audiences);
@@ -566,7 +632,7 @@
       ${projectSwitchHtml()}
       <div class="hero-block">
         <h2 style="font-size:clamp(22px,6.5vw,30px)">Документ</h2>
-        <p>Word по актуальным ценам, прогрессу и победам. Текст сразу сохраняется в базу для чата «Проект».</p>
+        <p>Смотри текст на телефоне внутри приложения — или скачай .docx. База для чата «Проект» обновляется сама.</p>
       </div>
 
       <div class="panel">
@@ -585,42 +651,47 @@
       </div>
 
       <div class="panel">
-        <button type="button" class="btn block" id="doc-generate" ${docsBusy ? "disabled" : ""}>
+        <button type="button" class="btn block" id="doc-preview-open">Смотреть на телефоне</button>
+        <button type="button" class="btn secondary block" id="doc-generate" style="margin-top:8px" ${docsBusy ? "disabled" : ""}>
           ${docsBusy ? "Собираю Word…" : "Сгенерировать .docx"}
         </button>
-        <p class="small muted" style="margin:10px 0 0;line-height:1.4">Тексты в базе обновляются сами при любом изменении цен, плана, побед или заметок — тот же текст идёт в Word и в чат «Проект».</p>
+        <p class="small muted" style="margin:10px 0 0;line-height:1.4">Просмотр — прямо здесь, без Word и сторонних сайтов. Скачивание — если нужно отправить файл.</p>
         ${
           lastDoc
             ? `<div class="stack" style="margin-top:12px">
-                <p class="small" style="margin:0;line-height:1.4">Готово: <strong>${esc(lastDoc.filename)}</strong></p>
+                <p class="small" style="margin:0;line-height:1.4">Файл: <strong>${esc(lastDoc.filename)}</strong></p>
                 <button type="button" class="btn secondary block" id="doc-download">Скачать</button>
                 <button type="button" class="btn secondary block" id="doc-share">Поделиться / мессенджер</button>
                 <a class="btn ghost block" id="doc-mail" href="${BossDocs.mailtoLink(lastDoc.title)}" style="text-align:center;text-decoration:none">Открыть почту</a>
-                <p class="tiny muted" style="margin:0;line-height:1.4;text-transform:none;letter-spacing:0">На iPhone «Поделиться» откроет Telegram / Max / Files. Письмо — приложи файл вручную.</p>
               </div>`
             : ""
         }
       </div>
 
-      <div class="section-title">В базе для чата (${archived.length})</div>
+      <div class="section-title">В базе (${archived.length})</div>
       <div class="panel">
         ${
           archived.length
-            ? `<ul class="doc-preview">${archived
+            ? `<div class="stack">${archived
                 .slice(0, 12)
-                .map((d) => `<li>${esc(d.title)} <span class="muted">· ${esc(d.audience || "")}</span></li>`)
-                .join("")}</ul>`
-            : `<p class="small muted" style="margin:0">Пока пусто — нажми «Обновить тексты» или сгенерируй Word.</p>`
+                .map(
+                  (d) => `
+              <button type="button" class="btn secondary block doc-arch-btn" data-preview-audience="${esc(d.audience || "")}">
+                ${esc(d.title)}
+              </button>`
+                )
+                .join("")}</div>`
+            : `<p class="small muted" style="margin:0">Пока пусто — открой просмотр или сгенерируй Word.</p>`
         }
       </div>
 
-      <div class="section-title">Что попадёт внутрь</div>
+      <div class="section-title">Что внутри</div>
       <div class="panel">
         <ul class="doc-preview">
           <li>Название и позиция проекта</li>
-          <li>Прайс и юнит (включая твои правки из чата)</li>
-          <li>Прогресс плана ${Store.progress(p.id, state).pct}%</li>
-          <li>Победы и следующий шаг под аудиторию</li>
+          <li>Прайс, юнит, прогресс ${Store.progress(p.id, state).pct}%</li>
+          <li>ИС / патент / регистрация прав</li>
+          <li>Победы и следующий шаг</li>
         </ul>
       </div>
     `;
@@ -731,6 +802,13 @@
   async function sendAiChat(text) {
     const msg = (text || "").trim();
     if (!msg || chatBusy) return;
+    if (!BossChat.hasKey(state)) {
+      if (!state.ai) state.ai = {};
+      state.ai.showKeyEditor = true;
+      save();
+      render();
+      return;
+    }
     const pid = state.activeProject;
     const thread = Store.getChat(state, pid);
     thread.push({ role: "user", text: msg, at: Date.now() });
@@ -746,13 +824,13 @@
         text: result.reply,
         applied,
         at: Date.now(),
-        via: BossChat.mode(state),
+        via: BossChat.mode(),
       });
       if (thread.length > 60) Store.setChat(state, pid, thread.slice(-60));
     } catch (e) {
       thread.push({
         role: "assistant",
-        text: "Не получилось достучаться до модели: " + BossChat.friendlyError(e),
+        text: "Не получилось: " + BossChat.friendlyError(e),
         at: Date.now(),
       });
     }
@@ -922,6 +1000,38 @@
       });
     }
 
+    const keyForm = document.getElementById("openai-key-form");
+    if (keyForm) {
+      keyForm.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const input = document.getElementById("openai-key-input");
+        const key = String((input && input.value) || "").trim();
+        if (!state.ai) state.ai = {};
+        if (!/^sk-[A-Za-z0-9_\-]{20,}$/.test(key)) {
+          alert("Ключ должен начинаться с sk- и быть длинным. Возьми API key на platform.openai.com");
+          return;
+        }
+        state.ai.openaiKey = key;
+        state.ai.apiKey = key;
+        state.ai.keyOk = true;
+        state.ai.showKeyEditor = false;
+        state.ai.provider = "openai";
+        if (!state.ai.openaiModel) state.ai.openaiModel = "gpt-4o-mini";
+        save();
+        render();
+      });
+    }
+
+    const toggleKey = document.getElementById("toggle-openai-key");
+    if (toggleKey) {
+      toggleKey.addEventListener("click", () => {
+        if (!state.ai) state.ai = {};
+        state.ai.showKeyEditor = !state.ai.showKeyEditor;
+        save();
+        render();
+      });
+    }
+
     app.querySelectorAll("[data-chat-mode]").forEach((btn) => {
       btn.addEventListener("click", () => {
         if (!state.ui) state.ui = { notesMode: "closed", editingNoteId: null, chatMode: "ai" };
@@ -976,6 +1086,31 @@
 
     const gen = document.getElementById("doc-generate");
     if (gen) gen.addEventListener("click", () => generateDoc());
+
+    const genPrev = document.getElementById("doc-generate-from-preview");
+    if (genPrev) {
+      genPrev.addEventListener("click", async () => {
+        const aud = (state.ui && state.ui.docPreview && state.ui.docPreview.audience) || state.docs.audience;
+        if (aud) state.docs.audience = aud;
+        await generateDoc();
+      });
+    }
+
+    const previewOpen = document.getElementById("doc-preview-open");
+    if (previewOpen) {
+      previewOpen.addEventListener("click", () => openDocPreview(state.docs.audience || "investor"));
+    }
+
+    const previewClose = document.getElementById("doc-preview-close");
+    if (previewClose) previewClose.addEventListener("click", () => closeDocPreview());
+
+    app.querySelectorAll("[data-preview-audience]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const a = btn.dataset.previewAudience;
+        if (a) state.docs.audience = a;
+        openDocPreview(a || state.docs.audience);
+      });
+    });
 
     const dl = document.getElementById("doc-download");
     if (dl && lastDoc) {
