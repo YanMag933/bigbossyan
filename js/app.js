@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const VER = "33";
+  const VER = "34";
   let state = Store.load();
   BossDocs.syncAll(state);
   Store.save(state);
@@ -966,7 +966,7 @@
 
       <div class="section-title">Приложение</div>
       <div class="panel">
-        <p class="small muted" style="margin:0 0 12px;line-height:1.45">Версия интерфейса: v${esc(VER)}. Темы хранятся в кэше браузера и работают офлайн после скачивания.</p>
+        <p class="small muted" style="margin:0 0 12px;line-height:1.45">Версия интерфейса: v${esc(VER)}. Темы с текстурами ~0.3–0.6 МБ. После обновления удали тему и скачай снова — так подтянется texture.png.</p>
         <button type="button" class="btn secondary block" id="themes-reload">Обновить каталог тем</button>
       </div>
     `;
@@ -1379,6 +1379,7 @@
         try {
           await BossThemes.download(id);
           await BossThemes.markInstalled(state, id);
+          await BossThemes.apply(id, state);
           save();
         } catch (e) {
           alert("Не скачалось: " + ((e && e.message) || e));

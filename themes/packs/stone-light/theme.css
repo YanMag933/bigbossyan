@@ -1,115 +1,159 @@
 html[data-theme="stone-light"] {
-  --bg: #e8e4dc;
-  --bg-2: #f4f1ea;
+  --bg: #e6e1d7;
+  --bg-2: #f7f4ee;
   --bg-3: #ffffff;
-  --graphite: #d9d4cb;
-  --graphite-2: #c4bfb4;
-  --line: rgba(70, 74, 82, 0.16);
-  --line-strong: rgba(70, 74, 82, 0.32);
-  --text: #1f1c18;
-  --muted: #6b6560;
-  --gold: #6b7280;
-  --gold-bright: #4b5563;
-  --gold-dim: #9ca3af;
-  --gold-soft: rgba(107, 114, 128, 0.12);
-  --ok: #1f8a5a;
-  --danger: #b33a3a;
-  --shadow-lux: 0 14px 36px rgba(40,35,25,0.12);
-  --metric-bg: linear-gradient(160deg, rgba(255,255,255,0.95), rgba(220,215,205,0.85));
-  --metric-shadow: inset 0 1px 0 #fff, 0 8px 20px rgba(40,35,25,0.1);
-  --nav-bg: rgba(244,241,234,0.96);
-  --topbar-bg: linear-gradient(180deg, rgba(244,241,234,0.98) 0%, rgba(244,241,234,0.88) 70%, transparent);
-  --hero-title: linear-gradient(180deg, #1f1c18 10%, #4b5563 100%);
+  --graphite: #d5cfc4;
+  --graphite-2: #bdb6aa;
+  --line: rgba(40, 42, 48, 0.22);
+  --line-strong: rgba(40, 42, 48, 0.4);
+  --text: #17150f;
+  --muted: #5a554c;
+  --gold: #3f4654;
+  --gold-bright: #1f2430;
+  --gold-dim: #7a8190;
+  --gold-soft: rgba(31, 36, 48, 0.1);
+  --ok: #157a4e;
+  --danger: #b12e2e;
+  --btn-bg: linear-gradient(180deg, #3a4252, #232a36 55%, #12161e);
+  --btn-color: #f8fafc;
+  --btn-shadow: inset 0 1px 0 rgba(255,255,255,0.25), 0 12px 24px rgba(30,25,15,0.22);
+  --btn-secondary-bg: linear-gradient(180deg, #efeae1, #ddd6ca);
+  --panel-bg: linear-gradient(145deg, rgba(255,255,255,0.95), transparent 40%), linear-gradient(180deg, #fffcf7, #ebe4d8);
+  --panel-shadow: inset 0 1px 0 #fff, 0 12px 28px rgba(40,35,25,0.12);
+  --metric-bg: linear-gradient(160deg, #ffffff, #e8e2d6);
+  --metric-shadow: inset 0 1px 0 #fff, 0 8px 18px rgba(40,35,25,0.1);
+  --nav-bg: rgba(247,244,238,0.96);
+  --nav-active-bg: linear-gradient(180deg, rgba(35,42,54,0.12), rgba(35,42,54,0.04));
+  --topbar-scrim: linear-gradient(180deg, rgba(247,244,238,0.98) 0%, rgba(247,244,238,0.88) 70%, transparent);
+  --hero-title: linear-gradient(180deg, #17150f 10%, #2c3340 100%);
+  --icon-glow: drop-shadow(0 0 6px rgba(30,35,45,0.25));
+  --body-bg: linear-gradient(180deg, rgba(247,244,238,0.72), rgba(230,225,215,0.88)), #e6e1d7;
+  --surface-opacity: 0.34;
+  --surface-blend: multiply;
+  --noise-opacity: 0.02;
 }
 html[data-theme="stone-light"] body {
-  background:
-    radial-gradient(ellipse 80% 50% at 80% 0%, rgba(120,120,130,0.12), transparent 50%),
-    radial-gradient(ellipse 50% 40% at 10% 90%, rgba(90,90,100,0.1), transparent 45%),
-    linear-gradient(180deg, #f7f4ee, #e8e4dc 55%, #ddd8ce);
+  background: var(--body-bg);
   color: var(--text);
 }
-html[data-theme="stone-light"] .panel {
-  background-color: #f4f1ea;
-  background-image:
-    linear-gradient(145deg, rgba(255,255,255,0.9), transparent 40%),
-    linear-gradient(180deg, #faf8f3, #ebe6dc),
-    repeating-linear-gradient(125deg, transparent 0 22px, rgba(90,90,100,0.06) 22px 23px),
-    repeating-linear-gradient(35deg, transparent 0 40px, rgba(60,60,70,0.04) 40px 41px);
-  border: 1px solid rgba(90,90,100,0.18);
-  color: var(--text);
-  box-shadow:
-    inset 0 1px 0 #fff,
-    inset 0 -1px 0 rgba(80,70,50,0.08),
-    0 12px 28px rgba(40,35,25,0.1);
-}
+
 html[data-theme="stone-light"] .btn:not(.ghost):not(.secondary) {
-  background: linear-gradient(180deg, #9ca3af, #6b7280 50%, #4b5563);
-  color: #f8fafc;
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.35),
-    0 10px 22px rgba(40,35,25,0.18);
+  background: var(--btn-bg);
+  color: var(--btn-color);
+  box-shadow: var(--btn-shadow);
+  text-shadow: none;
 }
 html[data-theme="stone-light"] .btn.secondary {
-  background: var(--graphite);
+  background: var(--btn-secondary-bg);
+  color: var(--text);
   border: 1px solid var(--line-strong);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 8px 20px rgba(0,0,0,0.35);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+}
+html[data-theme="stone-light"] .btn.ghost {
+  color: var(--text);
+  border: 1px solid var(--line-strong);
+  background: transparent;
+}
+html[data-theme="stone-light"] .panel {
+  background: var(--panel-bg);
+  border: 1px solid var(--line);
+  box-shadow: var(--panel-shadow);
+  color: var(--text);
 }
 html[data-theme="stone-light"] .metric,
 html[data-theme="stone-light"] .metric-btn {
-  background: var(--metric-bg, rgba(0,0,0,0.28));
+  background: var(--metric-bg);
   border: 1px solid var(--line);
-  box-shadow: var(--metric-shadow, none);
+  box-shadow: var(--metric-shadow);
+  color: var(--text);
 }
 html[data-theme="stone-light"] .bottom-nav {
-  background: var(--nav-bg, rgba(8,8,8,0.94));
+  background: var(--nav-bg);
   border-top-color: var(--line);
 }
 html[data-theme="stone-light"] .topbar {
-  background: var(--topbar-bg, linear-gradient(180deg, rgba(7,7,7,0.98) 0%, rgba(7,7,7,0.88) 72%, transparent));
+  background: var(--topbar-scrim);
 }
 html[data-theme="stone-light"] .hero-block h2 {
-  background: var(--hero-title, linear-gradient(180deg, #fff 8%, var(--gold) 100%));
+  background: var(--hero-title);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
+html[data-theme="stone-light"] .nav-btn {
+  color: var(--muted);
+}
 html[data-theme="stone-light"] .nav-btn.active {
-  background: linear-gradient(180deg, color-mix(in srgb, var(--gold) 22%, transparent), color-mix(in srgb, var(--gold) 6%, transparent));
+  color: var(--text);
+  background: var(--nav-active-bg);
 }
 html[data-theme="stone-light"] .nav-btn.active .nav-ico {
   color: var(--gold-bright);
-  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--gold) 50%, transparent));
-}
-html[data-theme="stone-light"] .brand-mark {
-  border-color: color-mix(in srgb, var(--gold) 55%, transparent);
-  box-shadow: 0 0 0 1px rgba(255,255,255,0.04), 0 8px 24px color-mix(in srgb, var(--gold) 22%, transparent);
-}
-html[data-theme="stone-light"] .funnel-bar {
-  background: linear-gradient(90deg, color-mix(in srgb, var(--gold) 40%, transparent), rgba(42,42,42,0.9));
-}
-html[data-theme="stone-light"] .bar i {
-  background: linear-gradient(90deg, var(--gold-dim), var(--gold-bright));
+  filter: var(--icon-glow);
 }
 html[data-theme="stone-light"] .eyebrow,
 html[data-theme="stone-light"] .section-title,
 html[data-theme="stone-light"] .gloss-term,
 html[data-theme="stone-light"] .metric .value,
-html[data-theme="stone-light"] .price-row strong {
+html[data-theme="stone-light"] .price-row strong,
+html[data-theme="stone-light"] .theme-meta h3 {
   color: var(--gold-bright);
 }
-html[data-theme="stone-light"] .btn.ghost {
-  color: var(--text);
-  border-color: rgba(70,74,82,0.35);
+html[data-theme="stone-light"] .muted,
+html[data-theme="stone-light"] .small.muted,
+html[data-theme="stone-light"] .tiny.muted {
+  color: var(--muted);
 }
 html[data-theme="stone-light"] .bubble.bot {
-  background: #fff;
-  color: #1f1c18;
-  border: 1px solid rgba(70,74,82,0.15);
+  background: var(--bg-3);
+  color: var(--text);
+  border: 1px solid var(--line);
 }
-html[data-theme="stone-light"] .chat-box {
-  background: rgba(255,255,255,0.55);
+html[data-theme="stone-light"] .bubble.me {
+  background: color-mix(in srgb, var(--gold) 28%, var(--bg-2));
+  color: var(--text);
+}
+html[data-theme="stone-light"] .chat-box,
+html[data-theme="stone-light"] .field input,
+html[data-theme="stone-light"] .field textarea,
+html[data-theme="stone-light"] .field select {
+  background: color-mix(in srgb, var(--bg) 70%, #000 30%);
+  color: var(--text);
+  border-color: var(--line);
+}
+html[data-theme="stone-light"] .brand-mark {
+  border-color: color-mix(in srgb, var(--gold) 55%, transparent);
+}
+html[data-theme="stone-light"] .funnel-bar {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--gold) 45%, transparent), var(--graphite));
+  color: var(--text);
+}
+html[data-theme="stone-light"] .bar i {
+  background: linear-gradient(90deg, var(--gold-dim), var(--gold-bright));
+}
+
+html[data-theme="stone-light"] .btn.secondary {
+  color: #17150f;
+  border-color: rgba(40,42,48,0.28);
+}
+html[data-theme="stone-light"] .bubble.bot {
+  background: #ffffff;
+  color: #17150f;
+  border: 1px solid rgba(40,42,48,0.16);
+}
+html[data-theme="stone-light"] .bubble.me {
+  background: #2c3340;
+  color: #f8fafc;
+}
+html[data-theme="stone-light"] .chat-box,
+html[data-theme="stone-light"] .field input,
+html[data-theme="stone-light"] .field textarea,
+html[data-theme="stone-light"] .field select {
+  background: #ffffff;
+  color: #17150f;
+  border-color: rgba(40,42,48,0.2);
 }
 html[data-theme="stone-light"] .doc-viewer-paper {
   background: #fff;
-  color: #1f1c18;
+  color: #17150f;
 }

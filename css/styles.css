@@ -41,6 +41,8 @@
   --noise-opacity: 0.04;
   --icon-glow: drop-shadow(0 0 8px rgba(212, 175, 55, 0.4));
   --surface-overlay: none;
+  --surface-opacity: 0;
+  --surface-blend: soft-light;
   --theme-color: #070707;
 }
 
@@ -80,8 +82,12 @@ body::after {
   position: fixed;
   inset: 0;
   z-index: 0;
-  background: var(--surface-overlay);
-  opacity: 1;
+  background-image: var(--surface-overlay);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: var(--surface-opacity, 0);
+  mix-blend-mode: var(--surface-blend, soft-light);
 }
 
 button, input, select, textarea {
@@ -371,13 +377,13 @@ button, input, select, textarea {
   border: 0;
   border-radius: 14px;
   padding: 13px 18px;
-  background: linear-gradient(180deg, var(--gold-bright), var(--gold));
-  color: #14110a;
+  background: var(--btn-bg);
+  color: var(--btn-color);
   font-weight: 700;
   letter-spacing: 0.02em;
   cursor: pointer;
   transition: transform 0.15s ease, filter 0.15s ease, box-shadow 0.2s ease;
-  box-shadow: 0 10px 28px rgba(212, 175, 55, 0.22);
+  box-shadow: var(--btn-shadow);
 }
 
 .btn:active { transform: scale(0.98); }
@@ -393,7 +399,7 @@ button, input, select, textarea {
 .btn.block { width: 100%; }
 
 .btn.secondary {
-  background: var(--graphite);
+  background: var(--btn-secondary-bg);
   border: 1px solid var(--line);
   color: var(--text);
   box-shadow: none;

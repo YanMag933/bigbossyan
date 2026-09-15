@@ -1,96 +1,131 @@
 html[data-theme="royal-gold"] {
   --bg: #050505;
-  --bg-2: #12100c;
-  --bg-3: #1c1812;
-  --graphite: #2a2418;
-  --graphite-2: #3d3424;
-  --line: rgba(232, 197, 71, 0.18);
-  --line-strong: rgba(232, 197, 71, 0.4);
-  --text: #f7f0df;
-  --muted: #a89b7a;
-  --gold: #d4af37;
-  --gold-bright: #f4e2a0;
-  --gold-dim: #8a6910;
-  --gold-soft: rgba(212, 175, 55, 0.18);
-  --shadow-lux: 0 18px 48px rgba(0,0,0,0.65), 0 0 0 1px rgba(212,175,55,0.08);
-  --metric-bg: linear-gradient(160deg, rgba(212,175,55,0.12), rgba(0,0,0,0.45));
-  --metric-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 10px 24px rgba(0,0,0,0.4);
-  --nav-bg: rgba(5,5,5,0.96);
-  --topbar-bg: linear-gradient(180deg, rgba(5,5,5,0.98) 0%, rgba(5,5,5,0.85) 70%, transparent);
-  --hero-title: linear-gradient(180deg, #fff8e7 10%, #d4af37 85%);
+  --bg-2: #14110c;
+  --bg-3: #1f1a12;
+  --graphite: #2c2518;
+  --graphite-2: #42361f;
+  --line: rgba(240, 205, 90, 0.28);
+  --line-strong: rgba(240, 205, 90, 0.55);
+  --text: #fff8e8;
+  --muted: #cbb892;
+  --gold: #e0b93a;
+  --gold-bright: #ffe6a0;
+  --gold-dim: #9a7314;
+  --gold-soft: rgba(224, 185, 58, 0.2);
+  --btn-bg: linear-gradient(180deg, #ffe9a8 0%, #e0b93a 45%, #a07a18 100%);
+  --btn-color: #1a1206;
+  --btn-shadow: inset 0 1px 0 rgba(255,255,255,0.55), 0 12px 28px rgba(224,185,58,0.35);
+  --btn-secondary-bg: linear-gradient(180deg, #3a3224, #221c12);
+  --panel-bg: linear-gradient(145deg, rgba(255,230,150,0.12), transparent 42%), linear-gradient(180deg, #1c1710, #100e09);
+  --panel-shadow: inset 0 1px 0 rgba(255,240,180,0.2), 0 16px 40px rgba(0,0,0,0.6);
+  --metric-bg: linear-gradient(160deg, rgba(224,185,58,0.16), rgba(0,0,0,0.5));
+  --metric-shadow: inset 0 1px 0 rgba(255,255,255,0.1), 0 10px 24px rgba(0,0,0,0.45);
+  --nav-bg: rgba(5,5,5,0.94);
+  --nav-active-bg: linear-gradient(180deg, rgba(224,185,58,0.24), rgba(224,185,58,0.06));
+  --topbar-scrim: linear-gradient(180deg, rgba(5,5,5,0.96) 0%, rgba(5,5,5,0.82) 70%, transparent);
+  --hero-title: linear-gradient(180deg, #fffaf0 8%, #e0b93a 90%);
+  --icon-glow: drop-shadow(0 0 8px rgba(224,185,58,0.5));
+  --body-bg: linear-gradient(180deg, rgba(5,5,5,0.55), rgba(5,5,5,0.82)), #050505;
+  --surface-opacity: 0.42;
+  --surface-blend: soft-light;
+  --noise-opacity: 0.03;
 }
 html[data-theme="royal-gold"] body {
-  background:
-    radial-gradient(ellipse 80% 45% at 50% -8%, rgba(212,175,55,0.28), transparent 55%),
-    radial-gradient(circle at 85% 20%, rgba(255,220,120,0.08), transparent 35%),
-    linear-gradient(180deg, #16120a 0%, #050505 50%, #000 100%);
+  background: var(--body-bg);
+  color: var(--text);
 }
-html[data-theme="royal-gold"] .panel {
-  background:
-    linear-gradient(145deg, rgba(244,226,160,0.14), transparent 40%),
-    linear-gradient(180deg, #1a1610, #0e0c09);
-  border: 1px solid rgba(212,175,55,0.35);
-  box-shadow:
-    inset 0 1px 0 rgba(255,240,180,0.18),
-    inset 0 -1px 0 rgba(0,0,0,0.5),
-    0 16px 40px rgba(0,0,0,0.55),
-    0 0 24px rgba(212,175,55,0.08);
-}
+
 html[data-theme="royal-gold"] .btn:not(.ghost):not(.secondary) {
-  background: linear-gradient(180deg, #ffe9a8 0%, #d4af37 48%, #9a7418 100%);
-  color: #1a1408;
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.55),
-    inset 0 -2px 0 rgba(90,60,0,0.35),
-    0 12px 28px rgba(212,175,55,0.35),
-    0 0 20px rgba(212,175,55,0.2);
-  text-shadow: 0 1px 0 rgba(255,255,255,0.25);
+  background: var(--btn-bg);
+  color: var(--btn-color);
+  box-shadow: var(--btn-shadow);
+  text-shadow: none;
 }
 html[data-theme="royal-gold"] .btn.secondary {
-  background: var(--graphite);
+  background: var(--btn-secondary-bg);
+  color: var(--text);
   border: 1px solid var(--line-strong);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 8px 20px rgba(0,0,0,0.35);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+}
+html[data-theme="royal-gold"] .btn.ghost {
+  color: var(--text);
+  border: 1px solid var(--line-strong);
+  background: transparent;
+}
+html[data-theme="royal-gold"] .panel {
+  background: var(--panel-bg);
+  border: 1px solid var(--line);
+  box-shadow: var(--panel-shadow);
+  color: var(--text);
 }
 html[data-theme="royal-gold"] .metric,
 html[data-theme="royal-gold"] .metric-btn {
-  background: var(--metric-bg, rgba(0,0,0,0.28));
+  background: var(--metric-bg);
   border: 1px solid var(--line);
-  box-shadow: var(--metric-shadow, none);
+  box-shadow: var(--metric-shadow);
+  color: var(--text);
 }
 html[data-theme="royal-gold"] .bottom-nav {
-  background: var(--nav-bg, rgba(8,8,8,0.94));
+  background: var(--nav-bg);
   border-top-color: var(--line);
 }
 html[data-theme="royal-gold"] .topbar {
-  background: var(--topbar-bg, linear-gradient(180deg, rgba(7,7,7,0.98) 0%, rgba(7,7,7,0.88) 72%, transparent));
+  background: var(--topbar-scrim);
 }
 html[data-theme="royal-gold"] .hero-block h2 {
-  background: var(--hero-title, linear-gradient(180deg, #fff 8%, var(--gold) 100%));
+  background: var(--hero-title);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
+html[data-theme="royal-gold"] .nav-btn {
+  color: var(--muted);
+}
 html[data-theme="royal-gold"] .nav-btn.active {
-  background: linear-gradient(180deg, color-mix(in srgb, var(--gold) 22%, transparent), color-mix(in srgb, var(--gold) 6%, transparent));
+  color: var(--text);
+  background: var(--nav-active-bg);
 }
 html[data-theme="royal-gold"] .nav-btn.active .nav-ico {
   color: var(--gold-bright);
-  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--gold) 50%, transparent));
-}
-html[data-theme="royal-gold"] .brand-mark {
-  border-color: color-mix(in srgb, var(--gold) 55%, transparent);
-  box-shadow: 0 0 0 1px rgba(255,255,255,0.04), 0 8px 24px color-mix(in srgb, var(--gold) 22%, transparent);
-}
-html[data-theme="royal-gold"] .funnel-bar {
-  background: linear-gradient(90deg, color-mix(in srgb, var(--gold) 40%, transparent), rgba(42,42,42,0.9));
-}
-html[data-theme="royal-gold"] .bar i {
-  background: linear-gradient(90deg, var(--gold-dim), var(--gold-bright));
+  filter: var(--icon-glow);
 }
 html[data-theme="royal-gold"] .eyebrow,
 html[data-theme="royal-gold"] .section-title,
 html[data-theme="royal-gold"] .gloss-term,
 html[data-theme="royal-gold"] .metric .value,
-html[data-theme="royal-gold"] .price-row strong {
+html[data-theme="royal-gold"] .price-row strong,
+html[data-theme="royal-gold"] .theme-meta h3 {
   color: var(--gold-bright);
+}
+html[data-theme="royal-gold"] .muted,
+html[data-theme="royal-gold"] .small.muted,
+html[data-theme="royal-gold"] .tiny.muted {
+  color: var(--muted);
+}
+html[data-theme="royal-gold"] .bubble.bot {
+  background: var(--bg-3);
+  color: var(--text);
+  border: 1px solid var(--line);
+}
+html[data-theme="royal-gold"] .bubble.me {
+  background: color-mix(in srgb, var(--gold) 28%, var(--bg-2));
+  color: var(--text);
+}
+html[data-theme="royal-gold"] .chat-box,
+html[data-theme="royal-gold"] .field input,
+html[data-theme="royal-gold"] .field textarea,
+html[data-theme="royal-gold"] .field select {
+  background: color-mix(in srgb, var(--bg) 70%, #000 30%);
+  color: var(--text);
+  border-color: var(--line);
+}
+html[data-theme="royal-gold"] .brand-mark {
+  border-color: color-mix(in srgb, var(--gold) 55%, transparent);
+}
+html[data-theme="royal-gold"] .funnel-bar {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--gold) 45%, transparent), var(--graphite));
+  color: var(--text);
+}
+html[data-theme="royal-gold"] .bar i {
+  background: linear-gradient(90deg, var(--gold-dim), var(--gold-bright));
 }

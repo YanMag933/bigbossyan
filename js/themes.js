@@ -1,11 +1,12 @@
-window.BossThemes = {
-  CACHE: "bigbossyan-themes-v1",
+﻿window.BossThemes = {
+  CACHE: "bigbossyan-themes-v2",
   STYLE_ID: "boss-theme-pack",
   MANIFEST_URL: "./themes/manifest.json",
   BUILTIN: "classic",
 
   _manifest: null,
   _busy: null,
+  _textureUrl: null,
 
   builtinMeta() {
     return {
@@ -68,6 +69,27 @@ window.BossThemes = {
     return !!hit;
   },
 
+  revokeTexture() {
+    if (this._textureUrl) {
+      try {
+        URL.revokeObjectURL(this._textureUrl);
+      } catch (_) {}
+      this._textureUrl = null;
+    }
+  },
+
+  async readCachedBlob(id, file) {
+    const cache = await this.openCache();
+    const url = this.packUrl(id, file);
+    let res = await cache.match(url);
+    if (!res) {
+      res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) return null;
+      await cache.put(url, res.clone());
+    }
+    return res.blob();
+  },
+
   async download(id, onProgress) {
     if (id === this.BUILTIN) return;
     if (this._busy) throw new Error("Уже качается другая тема");
@@ -76,7 +98,7 @@ window.BossThemes = {
       const man = await this.loadManifest();
       const pack = (man.packs || []).find((p) => p.id === id);
       if (!pack) throw new Error("Тема не найдена в облаке");
-      const files = pack.files && pack.files.length ? pack.files : ["theme.css", "preview.svg"];
+      const files = pack.files && pack.files.length ? pack.files : ["theme.css", "preview.svg", "texture.jpg"];
       const cache = await this.openCache();
       let done = 0;
       for (const file of files) {
@@ -147,6 +169,7 @@ window.BossThemes = {
     const root = document.documentElement;
     const old = document.getElementById(this.STYLE_ID);
     if (old) old.remove();
+    this.revokeTexture();
 
     if (!id || id === this.BUILTIN) {
       root.setAttribute("data-theme", "classic");
@@ -159,7 +182,18 @@ window.BossThemes = {
       throw new Error("Сначала скачай тему");
     }
 
-    const css = await this.readCss(id);
+    let css = await this.readCss(id);
+    const texBlob = await this.readCachedBlob(id, "texture.jpg");
+    if (texBlob) {
+      this._textureUrl = URL.createObjectURL(texBlob);
+      css +=
+        '\nhtml[data-theme="' +
+        id +
+        '"]{--surface-overlay:url("' +
+        this._textureUrl +
+        '") center / cover no-repeat;}';
+    }
+
     const style = document.createElement("style");
     style.id = this.STYLE_ID;
     style.textContent = css;
@@ -168,7 +202,7 @@ window.BossThemes = {
     t.active = id;
     await this.markInstalled(state, id);
 
-    const meta = (this._manifest && this._manifest.packs || []).find((p) => p.id === id);
+    const meta = ((this._manifest && this._manifest.packs) || []).find((p) => p.id === id);
     this.syncThemeColor((meta && meta.themeColor) || "#070707");
   },
 

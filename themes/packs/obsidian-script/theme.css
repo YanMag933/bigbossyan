@@ -1,93 +1,131 @@
 html[data-theme="obsidian-script"] {
-  --bg: #040404;
-  --bg-2: #101010;
-  --bg-3: #1a1a1a;
-  --graphite: #262626;
-  --graphite-2: #3a3a3a;
-  --line: rgba(240, 215, 140, 0.16);
-  --line-strong: rgba(240, 215, 140, 0.38);
-  --text: #f5f2ea;
-  --muted: #9a9588;
-  --gold: #c9a84a;
-  --gold-bright: #f0d78c;
-  --gold-dim: #7a6220;
-  --gold-soft: rgba(201, 168, 74, 0.16);
-  --shadow-lux: 0 22px 50px rgba(0,0,0,0.7);
-  --metric-bg: linear-gradient(165deg, rgba(255,255,255,0.05), rgba(0,0,0,0.55));
-  --metric-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 12px 28px rgba(0,0,0,0.5);
-  --hero-title: linear-gradient(180deg, #ffffff 0%, #f0d78c 70%, #a8842a 100%);
+  --bg: #030303;
+  --bg-2: #121212;
+  --bg-3: #1c1c1c;
+  --graphite: #2a2a2a;
+  --graphite-2: #404040;
+  --line: rgba(245, 220, 140, 0.28);
+  --line-strong: rgba(245, 220, 140, 0.5);
+  --text: #faf7f0;
+  --muted: #bdb49f;
+  --gold: #d4b24a;
+  --gold-bright: #ffe7a8;
+  --gold-dim: #856820;
+  --gold-soft: rgba(212, 178, 74, 0.18);
+  --btn-bg: linear-gradient(180deg, #fff1c0, #d4b24a 52%, #7a5c16);
+  --btn-color: #141008;
+  --btn-shadow: inset 0 1px 0 rgba(255,255,255,0.6), 0 12px 28px rgba(212,178,74,0.35);
+  --btn-secondary-bg: linear-gradient(180deg, #333, #1a1a1a);
+  --panel-bg: linear-gradient(160deg, rgba(255,255,255,0.08), transparent 36%), linear-gradient(180deg, #1e1e1e, #0c0c0c);
+  --panel-shadow: inset 0 1px 0 rgba(255,255,255,0.18), 0 18px 36px rgba(0,0,0,0.65);
+  --metric-bg: linear-gradient(165deg, rgba(255,255,255,0.08), rgba(0,0,0,0.55));
+  --metric-shadow: inset 0 1px 0 rgba(255,255,255,0.14), 0 10px 24px rgba(0,0,0,0.5);
+  --nav-bg: rgba(3,3,3,0.95);
+  --nav-active-bg: linear-gradient(180deg, rgba(212,178,74,0.22), rgba(212,178,74,0.05));
+  --topbar-scrim: linear-gradient(180deg, rgba(3,3,3,0.97) 0%, rgba(3,3,3,0.85) 70%, transparent);
+  --hero-title: linear-gradient(180deg, #fff 0%, #ffe7a8 65%, #d4b24a 100%);
+  --icon-glow: drop-shadow(0 0 8px rgba(255,231,168,0.45));
+  --body-bg: linear-gradient(180deg, rgba(3,3,3,0.5), rgba(3,3,3,0.78)), #030303;
+  --surface-opacity: 0.38;
+  --surface-blend: soft-light;
+  --noise-opacity: 0.025;
 }
 html[data-theme="obsidian-script"] body {
-  background:
-    radial-gradient(ellipse 70% 40% at 20% 0%, rgba(255,255,255,0.06), transparent 50%),
-    radial-gradient(ellipse 50% 30% at 100% 80%, rgba(201,168,74,0.1), transparent 45%),
-    linear-gradient(180deg, #141414, #040404 60%, #000);
+  background: var(--body-bg);
+  color: var(--text);
 }
-html[data-theme="obsidian-script"] .panel {
-  background:
-    linear-gradient(160deg, rgba(255,255,255,0.07), transparent 35%),
-    linear-gradient(180deg, #1c1c1c, #0a0a0a);
-  border: 1px solid rgba(240,215,140,0.28);
-  border-radius: 16px;
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.2),
-    inset 0 -2px 6px rgba(0,0,0,0.55),
-    0 18px 36px rgba(0,0,0,0.6);
-}
+
 html[data-theme="obsidian-script"] .btn:not(.ghost):not(.secondary) {
-  background: linear-gradient(180deg, #fff1c2, #c9a84a 55%, #7a5c18);
-  color: #120e06;
-  border-radius: 999px;
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.65),
-    0 10px 26px rgba(201,168,74,0.35),
-    0 0 1px #f0d78c;
+  background: var(--btn-bg);
+  color: var(--btn-color);
+  box-shadow: var(--btn-shadow);
+  text-shadow: none;
 }
 html[data-theme="obsidian-script"] .btn.secondary {
-  background: var(--graphite);
+  background: var(--btn-secondary-bg);
+  color: var(--text);
   border: 1px solid var(--line-strong);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 8px 20px rgba(0,0,0,0.35);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+}
+html[data-theme="obsidian-script"] .btn.ghost {
+  color: var(--text);
+  border: 1px solid var(--line-strong);
+  background: transparent;
+}
+html[data-theme="obsidian-script"] .panel {
+  background: var(--panel-bg);
+  border: 1px solid var(--line);
+  box-shadow: var(--panel-shadow);
+  color: var(--text);
 }
 html[data-theme="obsidian-script"] .metric,
 html[data-theme="obsidian-script"] .metric-btn {
-  background: var(--metric-bg, rgba(0,0,0,0.28));
+  background: var(--metric-bg);
   border: 1px solid var(--line);
-  box-shadow: var(--metric-shadow, none);
+  box-shadow: var(--metric-shadow);
+  color: var(--text);
 }
 html[data-theme="obsidian-script"] .bottom-nav {
-  background: var(--nav-bg, rgba(8,8,8,0.94));
+  background: var(--nav-bg);
   border-top-color: var(--line);
 }
 html[data-theme="obsidian-script"] .topbar {
-  background: var(--topbar-bg, linear-gradient(180deg, rgba(7,7,7,0.98) 0%, rgba(7,7,7,0.88) 72%, transparent));
+  background: var(--topbar-scrim);
 }
 html[data-theme="obsidian-script"] .hero-block h2 {
-  background: var(--hero-title, linear-gradient(180deg, #fff 8%, var(--gold) 100%));
+  background: var(--hero-title);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
+html[data-theme="obsidian-script"] .nav-btn {
+  color: var(--muted);
+}
 html[data-theme="obsidian-script"] .nav-btn.active {
-  background: linear-gradient(180deg, color-mix(in srgb, var(--gold) 22%, transparent), color-mix(in srgb, var(--gold) 6%, transparent));
+  color: var(--text);
+  background: var(--nav-active-bg);
 }
 html[data-theme="obsidian-script"] .nav-btn.active .nav-ico {
   color: var(--gold-bright);
-  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--gold) 50%, transparent));
-}
-html[data-theme="obsidian-script"] .brand-mark {
-  border-color: color-mix(in srgb, var(--gold) 55%, transparent);
-  box-shadow: 0 0 0 1px rgba(255,255,255,0.04), 0 8px 24px color-mix(in srgb, var(--gold) 22%, transparent);
-}
-html[data-theme="obsidian-script"] .funnel-bar {
-  background: linear-gradient(90deg, color-mix(in srgb, var(--gold) 40%, transparent), rgba(42,42,42,0.9));
-}
-html[data-theme="obsidian-script"] .bar i {
-  background: linear-gradient(90deg, var(--gold-dim), var(--gold-bright));
+  filter: var(--icon-glow);
 }
 html[data-theme="obsidian-script"] .eyebrow,
 html[data-theme="obsidian-script"] .section-title,
 html[data-theme="obsidian-script"] .gloss-term,
 html[data-theme="obsidian-script"] .metric .value,
-html[data-theme="obsidian-script"] .price-row strong {
+html[data-theme="obsidian-script"] .price-row strong,
+html[data-theme="obsidian-script"] .theme-meta h3 {
   color: var(--gold-bright);
+}
+html[data-theme="obsidian-script"] .muted,
+html[data-theme="obsidian-script"] .small.muted,
+html[data-theme="obsidian-script"] .tiny.muted {
+  color: var(--muted);
+}
+html[data-theme="obsidian-script"] .bubble.bot {
+  background: var(--bg-3);
+  color: var(--text);
+  border: 1px solid var(--line);
+}
+html[data-theme="obsidian-script"] .bubble.me {
+  background: color-mix(in srgb, var(--gold) 28%, var(--bg-2));
+  color: var(--text);
+}
+html[data-theme="obsidian-script"] .chat-box,
+html[data-theme="obsidian-script"] .field input,
+html[data-theme="obsidian-script"] .field textarea,
+html[data-theme="obsidian-script"] .field select {
+  background: color-mix(in srgb, var(--bg) 70%, #000 30%);
+  color: var(--text);
+  border-color: var(--line);
+}
+html[data-theme="obsidian-script"] .brand-mark {
+  border-color: color-mix(in srgb, var(--gold) 55%, transparent);
+}
+html[data-theme="obsidian-script"] .funnel-bar {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--gold) 45%, transparent), var(--graphite));
+  color: var(--text);
+}
+html[data-theme="obsidian-script"] .bar i {
+  background: linear-gradient(90deg, var(--gold-dim), var(--gold-bright));
 }
