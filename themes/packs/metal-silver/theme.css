@@ -28,8 +28,14 @@ html[data-theme="metal-silver"] {
   --panel-shadow: inset 0 1px 0 rgba(255,255,255,0.2), 0 14px 32px rgba(0,0,0,0.55);
   --metric-bg: linear-gradient(160deg, rgba(255,255,255,0.12), rgba(15,18,22,0.9));
   --metric-shadow: inset 0 1px 0 rgba(255,255,255,0.16), 0 10px 24px rgba(0,0,0,0.45);
-  --nav-bg: rgba(10,12,16,0.95);
-  --nav-active-bg: linear-gradient(180deg, rgba(208,213,220,0.18), rgba(208,213,220,0.04));
+  --nav-bg: #0a0c10;
+  --nav-face:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, transparent 38%),
+    linear-gradient(180deg, #2e353e 0%, #161a20 50%, #0a0c10 100%),
+    repeating-linear-gradient(90deg, transparent 0 1px, rgba(255,255,255,0.05) 1px 2px),
+    repeating-linear-gradient(0deg, transparent 0 4px, rgba(0,0,0,0.08) 4px 5px);
+  --nav-rim: inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 -2px 0 rgba(0, 0, 0, 0.7);
+  --nav-active-bg: linear-gradient(180deg, rgba(208,213,220,0.22), rgba(208,213,220,0.05));
   --topbar-scrim: linear-gradient(180deg, rgba(10,12,16,0.96) 0%, rgba(10,12,16,0.84) 70%, transparent);
   --hero-title: linear-gradient(180deg, #ffffff 0%, #d0d5dc 85%);
   --icon-glow: drop-shadow(0 0 8px rgba(230,235,245,0.4));
@@ -76,8 +82,17 @@ html[data-theme="metal-silver"] .metric-btn {
   color: var(--text);
 }
 html[data-theme="metal-silver"] .bottom-nav {
-  background: var(--nav-bg);
-  border-top-color: var(--line);
+  background-color: var(--nav-bg);
+  background-image: var(--nav-face);
+  border-top-color: var(--line-strong);
+  box-shadow: var(--nav-rim), 0 -18px 42px rgba(0, 0, 0, 0.75);
+}
+html[data-theme="metal-silver"] .bottom-nav::after {
+  background:
+    linear-gradient(90deg, rgba(0,0,0,0.2), transparent 30%, transparent 70%, rgba(0,0,0,0.2)),
+    repeating-linear-gradient(90deg, transparent 0 2px, rgba(255,255,255,0.06) 2px 3px);
+  mix-blend-mode: soft-light;
+  opacity: 1;
 }
 html[data-theme="metal-silver"] .topbar {
   background: var(--topbar-scrim);

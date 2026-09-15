@@ -28,8 +28,13 @@ html[data-theme="glass-prism"] {
   --panel-shadow: inset 0 1px 0 rgba(255,255,255,0.3), 0 16px 40px rgba(0,0,0,0.5), 0 0 28px rgba(46,230,255,0.1);
   --metric-bg: linear-gradient(145deg, rgba(184,247,255,0.12), rgba(10,14,24,0.7));
   --metric-shadow: inset 0 1px 0 rgba(255,255,255,0.2), 0 10px 24px rgba(0,0,0,0.45);
-  --nav-bg: rgba(4,6,12,0.94);
-  --nav-active-bg: linear-gradient(180deg, rgba(46,230,255,0.2), rgba(46,230,255,0.05));
+  --nav-bg: #04060c;
+  --nav-face:
+    linear-gradient(180deg, rgba(184, 247, 255, 0.18) 0%, transparent 45%),
+    linear-gradient(135deg, rgba(192, 132, 252, 0.12), transparent 55%),
+    linear-gradient(180deg, #1a2438 0%, #0c121c 55%, #04060c 100%);
+  --nav-rim: inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 -1px 0 rgba(46, 230, 255, 0.2), 0 0 28px rgba(46,230,255,0.12);
+  --nav-active-bg: linear-gradient(180deg, rgba(46,230,255,0.24), rgba(46,230,255,0.06));
   --topbar-scrim: linear-gradient(180deg, rgba(4,6,12,0.96) 0%, rgba(4,6,12,0.84) 70%, transparent);
   --hero-title: linear-gradient(90deg, #ffffff 0%, #b8f7ff 35%, #c084fc 70%, #f9a8d4 100%);
   --icon-glow: drop-shadow(0 0 10px rgba(46,230,255,0.5));
@@ -76,8 +81,18 @@ html[data-theme="glass-prism"] .metric-btn {
   color: var(--text);
 }
 html[data-theme="glass-prism"] .bottom-nav {
-  background: var(--nav-bg);
-  border-top-color: var(--line);
+  background-color: var(--nav-bg);
+  background-image: var(--nav-face);
+  border-top-color: var(--line-strong);
+  box-shadow: var(--nav-rim), 0 -18px 42px rgba(0, 0, 0, 0.7);
+}
+html[data-theme="glass-prism"] .bottom-nav::after {
+  background:
+    linear-gradient(115deg, rgba(255,255,255,0.22) 0%, transparent 28%, transparent 72%, rgba(192,132,252,0.14) 100%),
+    radial-gradient(ellipse 60% 50% at 20% 0%, rgba(184,247,255,0.25), transparent 60%),
+    radial-gradient(ellipse 50% 40% at 85% 100%, rgba(249,168,212,0.12), transparent 55%);
+  mix-blend-mode: soft-light;
+  opacity: 1;
 }
 html[data-theme="glass-prism"] .topbar {
   background: var(--topbar-scrim);

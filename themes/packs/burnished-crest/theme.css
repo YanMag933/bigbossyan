@@ -28,8 +28,13 @@ html[data-theme="burnished-crest"] {
   --panel-shadow: inset 0 1px 0 rgba(240,200,100,0.22), 0 14px 34px rgba(0,0,0,0.58);
   --metric-bg: linear-gradient(155deg, rgba(240,200,100,0.14), rgba(20,16,8,0.85));
   --metric-shadow: inset 0 1px 0 rgba(240,200,100,0.16), 0 10px 24px rgba(0,0,0,0.48);
-  --nav-bg: rgba(12,10,6,0.95);
-  --nav-active-bg: linear-gradient(180deg, rgba(212,164,58,0.22), rgba(212,164,58,0.05));
+  --nav-bg: #0c0a06;
+  --nav-face:
+    linear-gradient(180deg, rgba(240, 200, 100, 0.2) 0%, transparent 40%),
+    linear-gradient(180deg, #2a2212 0%, #16120a 52%, #0c0a06 100%),
+    repeating-linear-gradient(95deg, transparent 0 10px, rgba(212,164,58,0.08) 10px 11px);
+  --nav-rim: inset 0 1px 0 rgba(240, 200, 100, 0.3), inset 0 -2px 0 rgba(0, 0, 0, 0.72);
+  --nav-active-bg: linear-gradient(180deg, rgba(212,164,58,0.26), rgba(212,164,58,0.06));
   --topbar-scrim: linear-gradient(180deg, rgba(12,10,6,0.96) 0%, rgba(12,10,6,0.84) 70%, transparent);
   --hero-title: linear-gradient(180deg, #fff6e0 0%, #d4a43a 90%);
   --icon-glow: drop-shadow(0 0 8px rgba(240,200,100,0.45));
@@ -76,8 +81,17 @@ html[data-theme="burnished-crest"] .metric-btn {
   color: var(--text);
 }
 html[data-theme="burnished-crest"] .bottom-nav {
-  background: var(--nav-bg);
-  border-top-color: var(--line);
+  background-color: var(--nav-bg);
+  background-image: var(--nav-face);
+  border-top-color: var(--line-strong);
+  box-shadow: var(--nav-rim), 0 -18px 42px rgba(0, 0, 0, 0.78);
+}
+html[data-theme="burnished-crest"] .bottom-nav::after {
+  background:
+    linear-gradient(90deg, transparent, rgba(240,200,100,0.16), transparent),
+    repeating-linear-gradient(0deg, transparent 0 3px, rgba(255,230,160,0.04) 3px 4px);
+  mix-blend-mode: soft-light;
+  opacity: 1;
 }
 html[data-theme="burnished-crest"] .topbar {
   background: var(--topbar-scrim);

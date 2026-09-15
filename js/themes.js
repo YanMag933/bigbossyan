@@ -3,7 +3,7 @@
   STYLE_ID: "boss-theme-pack",
   MANIFEST_URL: "./themes/manifest.json",
   BUILTIN: "classic",
-  PACK_REV: 5,
+  PACK_REV: 6,
 
   _manifest: null,
   _busy: null,
@@ -99,6 +99,7 @@
         "--texture-btn-opacity",
         "--texture-panel-opacity",
         "--texture-icon-opacity",
+        "--texture-nav-opacity",
       ].forEach((k) => root.style.removeProperty(k));
     } catch (_) {}
   },
@@ -114,6 +115,7 @@
     root.style.setProperty("--texture-btn-opacity", "0.55");
     root.style.setProperty("--texture-panel-opacity", "0.3");
     root.style.setProperty("--texture-icon-opacity", "0.5");
+    root.style.setProperty("--texture-nav-opacity", "0.72");
 
     let layer = document.getElementById("boss-theme-texture");
     if (!layer) {

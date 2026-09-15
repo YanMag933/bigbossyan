@@ -39,8 +39,12 @@
   --metric-bg: linear-gradient(160deg, rgba(255, 255, 255, 0.03), transparent 50%), rgba(0, 0, 0, 0.3);
   --metric-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 8px 20px rgba(0, 0, 0, 0.25);
   --hero-title: linear-gradient(180deg, #fff 8%, #d4af37 100%);
-  --nav-bg: rgba(8, 8, 8, 0.94);
-  --nav-active-bg: linear-gradient(180deg, rgba(212, 175, 55, 0.18), rgba(212, 175, 55, 0.05));
+  --nav-bg: #0a0a0a;
+  --nav-face:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.14) 0%, transparent 38%),
+    linear-gradient(180deg, #1a1610 0%, #0c0a08 55%, #060504 100%);
+  --nav-rim: inset 0 1px 0 rgba(255, 240, 180, 0.22), inset 0 -1px 0 rgba(0, 0, 0, 0.65);
+  --nav-active-bg: linear-gradient(180deg, rgba(212, 175, 55, 0.22), rgba(212, 175, 55, 0.06));
   --topbar-scrim: linear-gradient(180deg, rgba(7, 7, 7, 0.98) 0%, rgba(7, 7, 7, 0.88) 72%, transparent);
   --body-bg:
     radial-gradient(ellipse 90% 50% at 50% -12%, rgba(212, 175, 55, 0.16), transparent 55%),
@@ -55,6 +59,7 @@
   --texture-btn-opacity: 0;
   --texture-panel-opacity: 0;
   --texture-icon-opacity: 0;
+  --texture-nav-opacity: 0;
   --theme-color: #070707;
 }
 
@@ -277,10 +282,54 @@ button, input, select, textarea {
   grid-template-columns: repeat(6, 1fr);
   gap: 1px;
   padding: 8px 4px calc(8px + var(--safe-b));
-  background: var(--nav-bg);
-  border-top: 1px solid var(--line);
-  backdrop-filter: blur(18px) saturate(1.2);
-  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.4);
+  background-color: var(--nav-bg);
+  background-image: var(--nav-face);
+  border-top: 1px solid var(--line-strong);
+  box-shadow:
+    var(--nav-rim),
+    0 -18px 42px rgba(0, 0, 0, 0.72),
+    0 -1px 0 rgba(0, 0, 0, 0.85);
+  z-index: 90;
+  isolation: isolate;
+  overflow: hidden;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.bottom-nav::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: var(--texture-url);
+  background-size: cover;
+  background-position: center bottom;
+  background-repeat: no-repeat;
+  opacity: var(--texture-nav-opacity);
+  mix-blend-mode: soft-light;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.bottom-nav::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.1) 0%, transparent 22%),
+    repeating-linear-gradient(
+      118deg,
+      transparent 0 11px,
+      rgba(255, 255, 255, 0.035) 11px 12px
+    ),
+    repeating-linear-gradient(
+      28deg,
+      transparent 0 17px,
+      rgba(0, 0, 0, 0.08) 17px 18px
+    );
+  opacity: 0.85;
+  mix-blend-mode: overlay;
 }
 
 .nav-btn {
@@ -299,6 +348,8 @@ button, input, select, textarea {
   letter-spacing: 0.03em;
   text-transform: uppercase;
   transition: color 0.2s ease, background 0.2s ease, text-shadow 0.2s ease;
+  position: relative;
+  z-index: 1;
 }
 
 .nav-btn.active {

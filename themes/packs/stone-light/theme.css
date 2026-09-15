@@ -30,8 +30,14 @@ html[data-theme="stone-light"] {
   --panel-shadow: inset 0 1px 0 #fff, 0 12px 28px rgba(40,35,25,0.12);
   --metric-bg: linear-gradient(160deg, #ffffff, #e8e2d6);
   --metric-shadow: inset 0 1px 0 #fff, 0 8px 18px rgba(40,35,25,0.1);
-  --nav-bg: rgba(247,244,238,0.96);
-  --nav-active-bg: linear-gradient(180deg, rgba(35,42,54,0.12), rgba(35,42,54,0.04));
+  --nav-bg: #f3efe6;
+  --nav-face:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, transparent 42%),
+    linear-gradient(180deg, #fffcf6 0%, #ebe4d6 55%, #d9d0c0 100%),
+    repeating-linear-gradient(125deg, transparent 0 12px, rgba(80,70,50,0.05) 12px 13px),
+    repeating-linear-gradient(35deg, transparent 0 20px, rgba(40,35,25,0.04) 20px 21px);
+  --nav-rim: inset 0 1px 0 #fff, inset 0 -2px 0 rgba(80, 70, 50, 0.14);
+  --nav-active-bg: linear-gradient(180deg, rgba(35,42,54,0.14), rgba(35,42,54,0.04));
   --topbar-scrim: linear-gradient(180deg, rgba(247,244,238,0.98) 0%, rgba(247,244,238,0.88) 70%, transparent);
   --hero-title: linear-gradient(180deg, #17150f 10%, #2c3340 100%);
   --icon-glow: drop-shadow(0 0 6px rgba(30,35,45,0.25));
@@ -78,8 +84,17 @@ html[data-theme="stone-light"] .metric-btn {
   color: var(--text);
 }
 html[data-theme="stone-light"] .bottom-nav {
-  background: var(--nav-bg);
-  border-top-color: var(--line);
+  background-color: var(--nav-bg);
+  background-image: var(--nav-face);
+  border-top-color: var(--line-strong);
+  box-shadow: var(--nav-rim), 0 -14px 36px rgba(40, 35, 25, 0.18);
+}
+html[data-theme="stone-light"] .bottom-nav::after {
+  background:
+    radial-gradient(ellipse 70% 50% at 50% 0%, rgba(255,255,255,0.7), transparent 60%),
+    repeating-linear-gradient(120deg, transparent 0 11px, rgba(90,80,60,0.06) 11px 12px);
+  mix-blend-mode: multiply;
+  opacity: 0.55;
 }
 html[data-theme="stone-light"] .topbar {
   background: var(--topbar-scrim);
