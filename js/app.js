@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const VER = "39";
+  const VER = "40";
   let state = Store.load();
   BossDocs.syncAll(state);
   Store.save(state);
@@ -429,6 +429,11 @@
       </div>
 
       <div class="section-title">Рынок и позиция</div>
+      ${
+        p.marketNote
+          ? `<div class="panel"><p class="small muted" style="margin:0;line-height:1.5;white-space:pre-wrap">${esc(p.marketNote.slice(0, 420))}${p.marketNote.length > 420 ? "…" : ""}</p></div>`
+          : ""
+      }
       <div class="metric-grid">
         ${a.market
           .map(
@@ -445,6 +450,11 @@
       </div>
 
       <div class="section-title">Юнит / прайс</div>
+      ${
+        p.financeNote
+          ? `<div class="panel"><p class="small muted" style="margin:0 0 10px;line-height:1.5;white-space:pre-wrap">${esc(p.financeNote.slice(0, 360))}${p.financeNote.length > 360 ? "…" : ""}</p></div>`
+          : ""
+      }
       <div class="panel">
         <div class="metric-grid" style="margin-bottom:8px">
           ${a.unit
@@ -508,12 +518,54 @@
             (pe, i) => `
           <button type="button" class="panel persona-btn" data-analytics-open="persona" data-analytics-index="${i}">
             <div class="tag gold">${esc(pe.name)}</div>
-            <p class="small muted" style="margin:10px 0 0;line-height:1.45;text-align:left">${esc(pe.text)}</p>
+            <p class="small muted" style="margin:10px 0 0;line-height:1.45;text-align:left">${esc(pe.text.slice(0, 160))}${pe.text.length > 160 ? "…" : ""}</p>
             <span class="metric-more">Подробнее →</span>
           </button>`
           )
           .join("")}
       </div>
+
+      ${
+        Array.isArray(p.competitors) && p.competitors.length
+          ? `<div class="section-title">Конкуренты</div>
+      <div class="stack">
+        ${p.competitors
+          .map(
+            (c, i) => `
+          <button type="button" class="panel persona-btn" data-analytics-open="competitor" data-analytics-index="${i}">
+            <div class="row between wrap">
+              <h4 style="margin:0">${esc(c.name)}</h4>
+              <span class="tag gold">${esc(c.price)}</span>
+            </div>
+            <p class="small muted" style="margin:8px 0 0;line-height:1.45;text-align:left">${esc(c.what)}</p>
+            <span class="metric-more">Сравнение →</span>
+          </button>`
+          )
+          .join("")}
+      </div>`
+          : ""
+      }
+
+      ${
+        Array.isArray(p.risks) && p.risks.length
+          ? `<div class="section-title">Риски</div>
+      <div class="stack">
+        ${p.risks
+          .map(
+            (r, i) => `
+          <button type="button" class="panel reco ${esc(r.level === "high" ? "high" : r.level === "low" ? "" : "med")} reco-btn" data-analytics-open="risk" data-analytics-index="${i}">
+            <div class="row between wrap">
+              <h4>${esc(r.name)}</h4>
+              <span class="tag ${r.level === "high" ? "gold" : ""}">${esc(r.level || "")}</span>
+            </div>
+            <p>${esc(r.impact)}</p>
+            <span class="metric-more">Митигация →</span>
+          </button>`
+          )
+          .join("")}
+      </div>`
+          : ""
+      }
 
       <div class="section-title">SWOT</div>
       <div class="panel swot-grid">
@@ -603,12 +655,12 @@
           {
             h: "Что это значит для «" + p.name + "»",
             t:
-              "Это ориентир рынка/позиции, а не обещание выручки. Сверяй с SOM и своими ближайшими шагами плана: сначала доказуемые оплаты/пилоты, потом масштаб.",
+              (p.marketNote && p.marketNote.split("\n\n")[0]) ||
+              "Это ориентир рынка/позиции, а не обещание выручки. Сверяй с SOM и ближайшими шагами плана: сначала оплаты/пилоты, потом масштаб.",
           },
-          {
-            h: "Связка с юнитом",
-            t: (a.unit || []).map((u) => u.label + ": " + u.value).join(" · ") || "—",
-          },
+          p.marketNote
+            ? { h: "Методология (кратко)", t: p.marketNote }
+            : null,
         ].filter(Boolean),
       };
     }
@@ -731,7 +783,40 @@
           { h: "Суть", t: r.body },
           {
             h: "Как применить",
-            t: "Перенеси в ближайшие задачи плана или скажи секретарю: «отметь задачу …» / уточни формулировку в Word для нужной аудитории.",
+            t: "Перенеси в ближайшие задачи плана или уточни формулировку в Word для нужной аудитории.",
+          },
+        ],
+      };
+    }
+    if (section === "competitor") {
+      const c = (p.competitors || [])[i];
+      if (!c) return null;
+      return {
+        title: "Конкурент · " + c.name,
+        blocks: [
+          { h: "Что обещает", t: c.what },
+          { h: "Цена", t: c.price },
+          { h: "Где бьёт нас", t: c.beatUs },
+          { h: "Где мы бьём его", t: c.weBeat },
+          {
+            h: "Как использовать в продаже",
+            t: "В КП и демо говори языком «мы бьём», не «они плохие». Клиент уже сравнивает — дай честную рамку.",
+          },
+        ],
+      };
+    }
+    if (section === "risk") {
+      const r = (p.risks || [])[i];
+      if (!r) return null;
+      return {
+        title: "Риск · " + r.name,
+        blocks: [
+          { h: "Уровень", t: String(r.level || "—") },
+          { h: "Влияние", t: r.impact },
+          { h: "Митигация", t: r.mitigation },
+          {
+            h: "Связь с планом",
+            t: "Если риск high — у него должна быть задача в фазах (юрист, KPI пилота, лимит сборок). Иначе это декоративный SWOT.",
           },
         ],
       };

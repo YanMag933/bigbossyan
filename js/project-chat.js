@@ -124,6 +124,23 @@ window.BossProjectChat = {
     (p.analytics.personas || []).forEach((row) => {
       push("persona", row.name, row.text);
     });
+    (p.competitors || []).forEach((row) => {
+      push(
+        "competitor",
+        `Конкурент · ${row.name}`,
+        `${row.what}\nЦена: ${row.price}\nГде сильнее нас: ${row.beatUs}\nГде мы сильнее: ${row.weBeat}`
+      );
+    });
+    (p.risks || []).forEach((row) => {
+      push(
+        "risk",
+        `Риск · ${row.name}`,
+        `[${row.level || ""}] ${row.impact}\nМитигация: ${row.mitigation}`
+      );
+    });
+    if (p.marketNote) push("market", "Методология рынка", p.marketNote);
+    if (p.financeNote) push("unit", "Логика финмодели", p.financeNote);
+    if (p.ask) push("scenario", "Запрос капитала", p.ask);
     (p.recommendations || []).forEach((row) => {
       push("rec", row.title, `${row.body}${row.priority ? " [" + row.priority + "]" : ""}`);
     });
@@ -206,7 +223,9 @@ window.BossProjectChat = {
     if (/сценар|капитал/.test(t)) return "scenario";
     if (/рынок|tam|sam|som/.test(t)) return "market";
     if (/портрет|персон|аудитор/.test(t)) return "persona";
-    if (/swot|силн|слаб|угроз|риск|возможност/.test(t)) return "swot";
+    if (/swot|силн|слаб|угроз|риск|возможност/.test(t)) return /конкурент/.test(t) ? "competitor" : "swot";
+    if (/конкурент|habitica|коуч|lms|hrm|notion/.test(t)) return "competitor";
+    if (/риск|митигац|угроз/.test(t) && !/swot/.test(t)) return "risk";
     if (/рекоменд/.test(t)) return "rec";
     if (/документ|ворд|docx|меморандум|инвестор|команд|покупател|\bкп\b/.test(t)) return "doc";
     if (/стади|этап/.test(t)) return "stage";
