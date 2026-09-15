@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const VER = "32";
+  const VER = "33";
   let state = Store.load();
   BossDocs.syncAll(state);
   Store.save(state);
@@ -9,6 +9,10 @@
   let chatBusy = false;
   let lastDoc = null;
   let docsBusy = false;
+  let themePacks = null;
+  let themesLoading = false;
+  let themeError = "";
+  let themeBusyId = "";
 
   const app = document.getElementById("app");
   const topTitle = document.getElementById("top-title");
@@ -21,6 +25,7 @@
     analytics: "Аналитика",
     chat: "Секретарь",
     docs: "Документ",
+    settings: "Настройки",
   };
 
   function project() {
@@ -886,6 +891,87 @@
     `;
   }
 
+  function renderSettings() {
+    if (!themePacks && !themesLoading) {
+      themesLoading = true;
+      themeError = "";
+      BossThemes.listPacks()
+        .then((list) => {
+          themePacks = list;
+          themesLoading = false;
+          if (state.tab === "settings") render();
+        })
+        .catch((e) => {
+          themeError = String((e && e.message) || e || "Ошибка списка тем");
+          themePacks = [BossThemes.builtinMeta()];
+          themesLoading = false;
+          if (state.tab === "settings") render();
+        });
+    }
+
+    const active = BossThemes.activeId(state);
+    const packs = themePacks || [];
+
+    return `
+      <div class="hero-block">
+        <h2 style="font-size:clamp(22px,6.5vw,30px)">Настройки</h2>
+        <p>Дизайны штаба. Classic уже внутри. Остальные — скачай по одной с облака, потом включи.</p>
+      </div>
+
+      <div class="section-title">Темы оформления</div>
+      ${
+        themeError
+          ? `<div class="panel"><p class="small" style="margin:0;color:var(--danger)">${esc(themeError)}</p>
+               <button type="button" class="btn secondary block" id="themes-reload" style="margin-top:10px">Обновить список</button></div>`
+          : ""
+      }
+      ${
+        !packs.length
+          ? `<div class="panel empty">${themesLoading ? "Загружаю каталог тем…" : "Список пуст"}</div>`
+          : `<div class="theme-grid">
+              ${packs
+                .map((p) => {
+                  const installed = BossThemes.isInstalled(state, p.id);
+                  const isActive = active === p.id;
+                  const busy = themeBusyId === p.id;
+                  const preview = BossThemes.previewSrc(p, state);
+                  return `
+                <article class="theme-card ${isActive ? "active" : ""}" data-theme-id="${esc(p.id)}">
+                  <div class="theme-preview-wrap">
+                    <img class="theme-preview" src="${esc(preview)}" alt="" width="320" height="200" loading="lazy" />
+                    ${isActive ? `<span class="theme-badge">Активна</span>` : ""}
+                  </div>
+                  <div class="theme-meta">
+                    <h3>${esc(p.name)}</h3>
+                    <p>${esc(p.blurb || "")}</p>
+                    <div class="tiny muted" style="text-transform:none;letter-spacing:0;margin-top:6px">
+                      ${p.builtin ? "Встроена" : installed ? "Скачана · " + BossThemes.formatBytes(p.bytes) : "В облаке · " + BossThemes.formatBytes(p.bytes)}
+                    </div>
+                  </div>
+                  <div class="theme-actions">
+                    ${
+                      p.builtin
+                        ? `<button type="button" class="btn block" data-theme-apply="${esc(p.id)}" ${isActive || busy ? "disabled" : ""}>${isActive ? "Уже включена" : busy ? "…" : "Включить"}</button>`
+                        : installed
+                          ? `<button type="button" class="btn block" data-theme-apply="${esc(p.id)}" ${isActive || busy ? "disabled" : ""}>${isActive ? "Уже включена" : busy ? "…" : "Включить"}</button>
+                             <button type="button" class="btn secondary block" data-theme-remove="${esc(p.id)}" ${busy || isActive ? "disabled" : ""} style="margin-top:8px">Удалить с телефона</button>`
+                          : `<button type="button" class="btn block" data-theme-download="${esc(p.id)}" ${busy ? "disabled" : ""}>${busy ? "Скачиваю…" : "Скачать тему"}</button>`
+                    }
+                  </div>
+                </article>`;
+                })
+                .join("")}
+            </div>`
+      }
+
+      <div class="section-title">Приложение</div>
+      <div class="panel">
+        <p class="small muted" style="margin:0 0 12px;line-height:1.45">Версия интерфейса: v${esc(VER)}. Темы хранятся в кэше браузера и работают офлайн после скачивания.</p>
+        <button type="button" class="btn secondary block" id="themes-reload">Обновить каталог тем</button>
+      </div>
+    `;
+  }
+
   function render() {
     topTitle.textContent = TAB_TITLES[state.tab] || "Штаб";
     nav.querySelectorAll(".nav-btn").forEach((btn) => {
@@ -897,7 +983,9 @@
     else if (state.tab === "plan") html = renderPlan();
     else if (state.tab === "analytics") html = renderAnalytics();
     else if (state.tab === "chat") html = renderChat();
-    else html = renderDocs();
+    else if (state.tab === "docs") html = renderDocs();
+    else if (state.tab === "settings") html = renderSettings();
+    else html = renderHq();
 
     app.innerHTML = html;
     bindView();
@@ -1282,6 +1370,69 @@
         }
       });
     }
+    app.querySelectorAll("[data-theme-download]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.dataset.themeDownload;
+        if (!id || themeBusyId) return;
+        themeBusyId = id;
+        render();
+        try {
+          await BossThemes.download(id);
+          await BossThemes.markInstalled(state, id);
+          save();
+        } catch (e) {
+          alert("Не скачалось: " + ((e && e.message) || e));
+        }
+        themeBusyId = "";
+        render();
+      });
+    });
+
+    app.querySelectorAll("[data-theme-apply]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.dataset.themeApply;
+        if (!id || themeBusyId) return;
+        themeBusyId = id;
+        render();
+        try {
+          await BossThemes.apply(id, state);
+          save();
+        } catch (e) {
+          alert("Не включилось: " + ((e && e.message) || e));
+        }
+        themeBusyId = "";
+        render();
+      });
+    });
+
+    app.querySelectorAll("[data-theme-remove]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.dataset.themeRemove;
+        if (!id || themeBusyId) return;
+        if (!confirm("Удалить тему с телефона? Потом можно скачать снова.")) return;
+        themeBusyId = id;
+        render();
+        try {
+          await BossThemes.remove(id, state);
+          save();
+        } catch (e) {
+          alert("Не удалилось: " + ((e && e.message) || e));
+        }
+        themeBusyId = "";
+        render();
+      });
+    });
+
+    const themesReload = document.getElementById("themes-reload");
+    if (themesReload) {
+      themesReload.addEventListener("click", () => {
+        themePacks = null;
+        themeError = "";
+        themesLoading = false;
+        BossThemes._manifest = null;
+        render();
+      });
+    }
   }
 
   nav.addEventListener("click", (e) => {
@@ -1308,5 +1459,12 @@
     navigator.serviceWorker.register("./sw.js?v=" + VER).catch(() => {});
   }
 
-  render();
+  BossThemes.boot(state)
+    .then(() => {
+      Store.save(state);
+    })
+    .catch(() => {})
+    .finally(() => {
+      render();
+    });
 })();

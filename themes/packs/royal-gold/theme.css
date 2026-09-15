@@ -1,0 +1,96 @@
+html[data-theme="royal-gold"] {
+  --bg: #050505;
+  --bg-2: #12100c;
+  --bg-3: #1c1812;
+  --graphite: #2a2418;
+  --graphite-2: #3d3424;
+  --line: rgba(232, 197, 71, 0.18);
+  --line-strong: rgba(232, 197, 71, 0.4);
+  --text: #f7f0df;
+  --muted: #a89b7a;
+  --gold: #d4af37;
+  --gold-bright: #f4e2a0;
+  --gold-dim: #8a6910;
+  --gold-soft: rgba(212, 175, 55, 0.18);
+  --shadow-lux: 0 18px 48px rgba(0,0,0,0.65), 0 0 0 1px rgba(212,175,55,0.08);
+  --metric-bg: linear-gradient(160deg, rgba(212,175,55,0.12), rgba(0,0,0,0.45));
+  --metric-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 10px 24px rgba(0,0,0,0.4);
+  --nav-bg: rgba(5,5,5,0.96);
+  --topbar-bg: linear-gradient(180deg, rgba(5,5,5,0.98) 0%, rgba(5,5,5,0.85) 70%, transparent);
+  --hero-title: linear-gradient(180deg, #fff8e7 10%, #d4af37 85%);
+}
+html[data-theme="royal-gold"] body {
+  background:
+    radial-gradient(ellipse 80% 45% at 50% -8%, rgba(212,175,55,0.28), transparent 55%),
+    radial-gradient(circle at 85% 20%, rgba(255,220,120,0.08), transparent 35%),
+    linear-gradient(180deg, #16120a 0%, #050505 50%, #000 100%);
+}
+html[data-theme="royal-gold"] .panel {
+  background:
+    linear-gradient(145deg, rgba(244,226,160,0.14), transparent 40%),
+    linear-gradient(180deg, #1a1610, #0e0c09);
+  border: 1px solid rgba(212,175,55,0.35);
+  box-shadow:
+    inset 0 1px 0 rgba(255,240,180,0.18),
+    inset 0 -1px 0 rgba(0,0,0,0.5),
+    0 16px 40px rgba(0,0,0,0.55),
+    0 0 24px rgba(212,175,55,0.08);
+}
+html[data-theme="royal-gold"] .btn:not(.ghost):not(.secondary) {
+  background: linear-gradient(180deg, #ffe9a8 0%, #d4af37 48%, #9a7418 100%);
+  color: #1a1408;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.55),
+    inset 0 -2px 0 rgba(90,60,0,0.35),
+    0 12px 28px rgba(212,175,55,0.35),
+    0 0 20px rgba(212,175,55,0.2);
+  text-shadow: 0 1px 0 rgba(255,255,255,0.25);
+}
+html[data-theme="royal-gold"] .btn.secondary {
+  background: var(--graphite);
+  border: 1px solid var(--line-strong);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 8px 20px rgba(0,0,0,0.35);
+}
+html[data-theme="royal-gold"] .metric,
+html[data-theme="royal-gold"] .metric-btn {
+  background: var(--metric-bg, rgba(0,0,0,0.28));
+  border: 1px solid var(--line);
+  box-shadow: var(--metric-shadow, none);
+}
+html[data-theme="royal-gold"] .bottom-nav {
+  background: var(--nav-bg, rgba(8,8,8,0.94));
+  border-top-color: var(--line);
+}
+html[data-theme="royal-gold"] .topbar {
+  background: var(--topbar-bg, linear-gradient(180deg, rgba(7,7,7,0.98) 0%, rgba(7,7,7,0.88) 72%, transparent));
+}
+html[data-theme="royal-gold"] .hero-block h2 {
+  background: var(--hero-title, linear-gradient(180deg, #fff 8%, var(--gold) 100%));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+html[data-theme="royal-gold"] .nav-btn.active {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--gold) 22%, transparent), color-mix(in srgb, var(--gold) 6%, transparent));
+}
+html[data-theme="royal-gold"] .nav-btn.active .nav-ico {
+  color: var(--gold-bright);
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--gold) 50%, transparent));
+}
+html[data-theme="royal-gold"] .brand-mark {
+  border-color: color-mix(in srgb, var(--gold) 55%, transparent);
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.04), 0 8px 24px color-mix(in srgb, var(--gold) 22%, transparent);
+}
+html[data-theme="royal-gold"] .funnel-bar {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--gold) 40%, transparent), rgba(42,42,42,0.9));
+}
+html[data-theme="royal-gold"] .bar i {
+  background: linear-gradient(90deg, var(--gold-dim), var(--gold-bright));
+}
+html[data-theme="royal-gold"] .eyebrow,
+html[data-theme="royal-gold"] .section-title,
+html[data-theme="royal-gold"] .gloss-term,
+html[data-theme="royal-gold"] .metric .value,
+html[data-theme="royal-gold"] .price-row strong {
+  color: var(--gold-bright);
+}

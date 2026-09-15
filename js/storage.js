@@ -126,6 +126,11 @@ window.Store = {
       if (!state.ui.notesMode) state.ui.notesMode = "closed";
       if (state.ui.editingNoteId === undefined) state.ui.editingNoteId = null;
       if (state.ui.chatMode !== "secretary") state.ui.chatMode = "secretary";
+      if (!state.ui.themes || typeof state.ui.themes !== "object") {
+        state.ui.themes = { active: "classic", installed: [] };
+      }
+      if (!Array.isArray(state.ui.themes.installed)) state.ui.themes.installed = [];
+      if (!state.ui.themes.active) state.ui.themes.active = "classic";
       if (state.ui.docPreview === undefined) state.ui.docPreview = null;
     }
 
@@ -171,7 +176,7 @@ window.Store = {
         keyStatus: "",
         showKeyEditor: false,
       },
-      ui: { notesMode: "closed", editingNoteId: null, chatMode: "secretary", docPreview: null, analyticsDetail: null },
+      ui: { notesMode: "closed", editingNoteId: null, chatMode: "secretary", docPreview: null, analyticsDetail: null, themes: { active: "classic", installed: [] } },
       docs: { audience: "investor", lastFile: null },
     };
   },

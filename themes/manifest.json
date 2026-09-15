@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "updated": "2026-09-15",
+  "packs": [
+    {
+      "id": "royal-gold",
+      "name": "Royal Gold",
+      "blurb": "Глянцевый обсидиан и полированное золото — штаб короля.",
+      "themeColor": "#050505",
+      "bytes": 4200,
+      "preview": "./themes/packs/royal-gold/preview.svg",
+      "files": ["theme.css", "preview.svg"]
+    },
+    {
+      "id": "obsidian-script",
+      "name": "Obsidian Script",
+      "blurb": "Жидкий чёрный металл, острые блики и золотая окантовка.",
+      "themeColor": "#0a0a0a",
+      "bytes": 4100,
+      "preview": "./themes/packs/obsidian-script/preview.svg",
+      "files": ["theme.css", "preview.svg"]
+    },
+    {
+      "id": "ember-lava",
+      "name": "Ember Lava",
+      "blurb": "Тёмный камень с раскалёнными трещинами и оранжевым свечением.",
+      "themeColor": "#0c0704",
+      "bytes": 4500,
+      "preview": "./themes/packs/ember-lava/preview.svg",
+      "files": ["theme.css", "preview.svg"]
+    },
+    {
+      "id": "stone-dark",
+      "name": "Dark Slate",
+      "blurb": "Тёмный сланец со светлыми прожилками и объёмными фасками.",
+      "themeColor": "#101214",
+      "bytes": 4800,
+      "preview": "./themes/packs/stone-dark/preview.svg",
+      "files": ["theme.css", "preview.svg"]
+    },
+    {
+      "id": "stone-light",
+      "name": "Light Marble",
+      "blurb": "Светлый камень с серыми мраморными вкраплениями.",
+      "themeColor": "#e8e4dc",
+      "bytes": 4900,
+      "preview": "./themes/packs/stone-light/preview.svg",
+      "files": ["theme.css", "preview.svg"]
+    },
+    {
+      "id": "burnished-crest",
+      "name": "Burnished Crest",
+      "blurb": "Потёртая латунь и угольный рельеф — герб с характером.",
+      "themeColor": "#12100c",
+      "bytes": 4300,
+      "preview": "./themes/packs/burnished-crest/preview.svg",
+      "files": ["theme.css", "preview.svg"]
+    },
+    {
+      "id": "glass-prism",
+      "name": "Glass Prism",
+      "blurb": "Тёмное стекло, радужные блики и кристальная кромка.",
+      "themeColor": "#06080c",
+      "bytes": 4400,
+      "preview": "./themes/packs/glass-prism/preview.svg",
+      "files": ["theme.css", "preview.svg"]
+    },
+    {
+      "id": "metal-silver",
+      "name": "Metal Silver",
+      "blurb": "Сатинированное серебро на матовом графите — cold premium.",
+      "themeColor": "#121416",
+      "bytes": 4200,
+      "preview": "./themes/packs/metal-silver/preview.svg",
+      "files": ["theme.css", "preview.svg"]
+    }
+  ]
+}

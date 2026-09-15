@@ -1,0 +1,91 @@
+html[data-theme="metal-silver"] {
+  --bg: #0c0e12;
+  --bg-2: #16191e;
+  --bg-3: #22262c;
+  --graphite: #2c3138;
+  --graphite-2: #3f4650;
+  --line: rgba(209, 213, 219, 0.16);
+  --line-strong: rgba(209, 213, 219, 0.34);
+  --text: #f3f4f6;
+  --muted: #9ca3af;
+  --gold: #c0c5cc;
+  --gold-bright: #e5e7eb;
+  --gold-dim: #6b7280;
+  --gold-soft: rgba(192, 197, 204, 0.12);
+  --shadow-lux: 0 18px 44px rgba(0,0,0,0.55);
+  --metric-bg: linear-gradient(160deg, rgba(255,255,255,0.1), rgba(20,22,26,0.85));
+  --metric-shadow: inset 0 1px 0 rgba(255,255,255,0.18), 0 10px 24px rgba(0,0,0,0.4);
+  --nav-bg: rgba(10,12,16,0.96);
+  --hero-title: linear-gradient(180deg, #ffffff 0%, #c0c5cc 80%);
+}
+html[data-theme="metal-silver"] body {
+  background:
+    radial-gradient(ellipse 70% 40% at 50% -10%, rgba(255,255,255,0.08), transparent 50%),
+    linear-gradient(180deg, #1a1d22, #0c0e12 55%, #08090c);
+}
+html[data-theme="metal-silver"] .panel {
+  background:
+    linear-gradient(155deg, rgba(255,255,255,0.12), transparent 38%),
+    linear-gradient(180deg, #2a2f36, #14171c);
+  border: 1px solid rgba(209,213,219,0.28);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.22),
+    inset 0 -2px 0 rgba(0,0,0,0.4),
+    0 14px 32px rgba(0,0,0,0.5);
+}
+html[data-theme="metal-silver"] .btn:not(.ghost):not(.secondary) {
+  background: linear-gradient(180deg, #f9fafb, #c0c5cc 48%, #6b7280);
+  color: #111827;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.75),
+    inset 0 -2px 0 rgba(30,35,40,0.3),
+    0 12px 26px rgba(0,0,0,0.4);
+}
+html[data-theme="metal-silver"] .btn.secondary {
+  background: var(--graphite);
+  border: 1px solid var(--line-strong);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 8px 20px rgba(0,0,0,0.35);
+}
+html[data-theme="metal-silver"] .metric,
+html[data-theme="metal-silver"] .metric-btn {
+  background: var(--metric-bg, rgba(0,0,0,0.28));
+  border: 1px solid var(--line);
+  box-shadow: var(--metric-shadow, none);
+}
+html[data-theme="metal-silver"] .bottom-nav {
+  background: var(--nav-bg, rgba(8,8,8,0.94));
+  border-top-color: var(--line);
+}
+html[data-theme="metal-silver"] .topbar {
+  background: var(--topbar-bg, linear-gradient(180deg, rgba(7,7,7,0.98) 0%, rgba(7,7,7,0.88) 72%, transparent));
+}
+html[data-theme="metal-silver"] .hero-block h2 {
+  background: var(--hero-title, linear-gradient(180deg, #fff 8%, var(--gold) 100%));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+html[data-theme="metal-silver"] .nav-btn.active {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--gold) 22%, transparent), color-mix(in srgb, var(--gold) 6%, transparent));
+}
+html[data-theme="metal-silver"] .nav-btn.active .nav-ico {
+  color: var(--gold-bright);
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--gold) 50%, transparent));
+}
+html[data-theme="metal-silver"] .brand-mark {
+  border-color: color-mix(in srgb, var(--gold) 55%, transparent);
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.04), 0 8px 24px color-mix(in srgb, var(--gold) 22%, transparent);
+}
+html[data-theme="metal-silver"] .funnel-bar {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--gold) 40%, transparent), rgba(42,42,42,0.9));
+}
+html[data-theme="metal-silver"] .bar i {
+  background: linear-gradient(90deg, var(--gold-dim), var(--gold-bright));
+}
+html[data-theme="metal-silver"] .eyebrow,
+html[data-theme="metal-silver"] .section-title,
+html[data-theme="metal-silver"] .gloss-term,
+html[data-theme="metal-silver"] .metric .value,
+html[data-theme="metal-silver"] .price-row strong {
+  color: var(--gold-bright);
+}
