@@ -14,11 +14,11 @@
         background: #070707;
         color: #f3efe6;
         font-family: "Segoe UI", sans-serif;
-        padding: 29px;
+        padding: 24px;
         text-align: center;
       }
-      h1 { font-size: 29px; margin: 0 0 12px; color: #f0d78c; }
-      p { color: #9a958a; line-height: 1.45; }
+      h1 { font-size: 22px; margin: 0 0 12px; color: #f0d78c; }
+      p { color: #9a958a; line-height: 1.45; max-width: 28em; margin: 0 auto; }
       a {
         display: inline-block;
         margin-top: 18px;
@@ -36,25 +36,28 @@
     <p id="msg">Очищаю старый кэш.</p>
     <script>
       (async () => {
+        // Должна совпадать с VER в index.html / app.js — иначе бесконечный редирект
+        var VER = "36";
         try {
           if ("serviceWorker" in navigator) {
-            const regs = await navigator.serviceWorker.getRegistrations();
-            await Promise.all(regs.map((r) => r.unregister()));
+            var regs = await navigator.serviceWorker.getRegistrations();
+            await Promise.all(regs.map(function (r) { return r.unregister(); }));
           }
           if (window.caches) {
-            const keys = await caches.keys();
-            await Promise.all(keys.map((k) => caches.delete(k)));
+            var keys = await caches.keys();
+            await Promise.all(keys.map(function (k) { return caches.delete(k); }));
           }
-          localStorage.setItem("bigbossyan-ver", "34");
+          localStorage.setItem("bigbossyan-ver", VER);
           document.getElementById("msg").textContent = "Готово. Открываю приложение…";
-          setTimeout(() => {
-            location.replace("./index.html?v=34&t=" + Date.now());
-          }, 400);
+          setTimeout(function () {
+            location.replace("./index.html?v=" + VER + "&t=" + Date.now());
+          }, 500);
         } catch (e) {
+          try { localStorage.setItem("bigbossyan-ver", VER); } catch (_) {}
           document.getElementById("msg").textContent =
-            "Не удалось автоматически. Очисти данные сайта вручную в настройках браузера.";
-          const a = document.createElement("a");
-          a.href = "./index.html?v=34&t=" + Date.now();
+            "Автосброс не вышел. Нажми кнопку ниже или очисти данные сайта в браузере.";
+          var a = document.createElement("a");
+          a.href = "./index.html?v=" + VER + "&t=" + Date.now();
           a.textContent = "Открыть приложение";
           document.body.appendChild(a);
         }

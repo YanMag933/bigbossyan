@@ -3,7 +3,7 @@
   STYLE_ID: "boss-theme-pack",
   MANIFEST_URL: "./themes/manifest.json",
   BUILTIN: "classic",
-  PACK_REV: 3,
+  PACK_REV: 4,
 
   _manifest: null,
   _busy: null,
@@ -87,6 +87,30 @@
       } catch (_) {}
       this._textureUrl = null;
     }
+    const layer = document.getElementById("boss-theme-texture");
+    if (layer) layer.remove();
+    try {
+      document.documentElement.style.removeProperty("--surface-overlay");
+      document.documentElement.style.removeProperty("--surface-opacity");
+      document.documentElement.style.removeProperty("--surface-blend");
+    } catch (_) {}
+  },
+
+  paintTexture(blobUrl, opacity) {
+    const root = document.documentElement;
+    root.style.setProperty("--surface-overlay", 'url("' + blobUrl + '")');
+    root.style.setProperty("--surface-opacity", String(opacity == null ? 0.62 : opacity));
+    root.style.setProperty("--surface-blend", "overlay");
+
+    let layer = document.getElementById("boss-theme-texture");
+    if (!layer) {
+      layer = document.createElement("div");
+      layer.id = "boss-theme-texture";
+      layer.setAttribute("aria-hidden", "true");
+      document.body.insertBefore(layer, document.body.firstChild);
+    }
+    layer.style.backgroundImage = 'url("' + blobUrl + '")';
+    layer.style.opacity = String(opacity == null ? 0.62 : opacity);
   },
 
   async readCachedBlob(id, file) {
@@ -206,19 +230,9 @@
 
     let css = await this.readCss(id);
     const texBlob = await this.readCachedBlob(id, "texture.jpg");
-    if (texBlob) {
+    if (texBlob && texBlob.size > 0) {
       this._textureUrl = URL.createObjectURL(texBlob);
-      // только url() — в styles.css это background-image
-      css +=
-        '\nhtml[data-theme="' +
-        id +
-        '"]{--surface-overlay:url("' +
-        this._textureUrl +
-        '");}';
-      // Если в кэше старый CSS без opacity — текстура всё равно видна
-      if (css.indexOf("--surface-opacity") < 0) {
-        css += '\nhtml[data-theme="' + id + '"]{--surface-opacity:0.5;--surface-blend:soft-light;}';
-      }
+      this.paintTexture(this._textureUrl, 0.62);
     }
 
     const style = document.createElement("style");

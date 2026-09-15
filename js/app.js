@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const VER = "35";
+  const VER = "36";
   let state = Store.load();
   BossDocs.syncAll(state);
   Store.save(state);

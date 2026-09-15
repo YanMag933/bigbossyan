@@ -87,7 +87,19 @@ body::after {
   background-position: center;
   background-repeat: no-repeat;
   opacity: var(--surface-opacity, 0);
-  mix-blend-mode: var(--surface-blend, soft-light);
+  mix-blend-mode: var(--surface-blend, overlay);
+}
+
+#boss-theme-texture {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0.62;
+  mix-blend-mode: overlay;
 }
 
 button, input, select, textarea {
