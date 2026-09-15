@@ -26,7 +26,7 @@ html[data-theme="metal-silver"] {
   --hero-title: linear-gradient(180deg, #ffffff 0%, #d0d5dc 85%);
   --icon-glow: drop-shadow(0 0 8px rgba(230,235,245,0.4));
   --body-bg: linear-gradient(180deg, rgba(10,12,16,0.5), rgba(10,12,16,0.8)), #0a0c10;
-  --surface-opacity: 0.38;
+  --surface-opacity: 0.55;
   --surface-blend: soft-light;
   --noise-opacity: 0.02;
 }

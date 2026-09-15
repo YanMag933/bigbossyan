@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const VER = "34";
+  const VER = "35";
   let state = Store.load();
   BossDocs.syncAll(state);
   Store.save(state);
@@ -954,7 +954,8 @@
                         ? `<button type="button" class="btn block" data-theme-apply="${esc(p.id)}" ${isActive || busy ? "disabled" : ""}>${isActive ? "Уже включена" : busy ? "…" : "Включить"}</button>`
                         : installed
                           ? `<button type="button" class="btn block" data-theme-apply="${esc(p.id)}" ${isActive || busy ? "disabled" : ""}>${isActive ? "Уже включена" : busy ? "…" : "Включить"}</button>
-                             <button type="button" class="btn secondary block" data-theme-remove="${esc(p.id)}" ${busy || isActive ? "disabled" : ""} style="margin-top:8px">Удалить с телефона</button>`
+                             <button type="button" class="btn secondary block" data-theme-redownload="${esc(p.id)}" ${busy ? "disabled" : ""} style="margin-top:8px">${busy ? "Обновляю…" : "Обновить пакет"}</button>
+                             <button type="button" class="btn secondary block" data-theme-remove="${esc(p.id)}" ${busy ? "disabled" : ""} style="margin-top:8px">${isActive ? "Выключить и удалить" : "Удалить с телефона"}</button>`
                           : `<button type="button" class="btn block" data-theme-download="${esc(p.id)}" ${busy ? "disabled" : ""}>${busy ? "Скачиваю…" : "Скачать тему"}</button>`
                     }
                   </div>
@@ -966,7 +967,7 @@
 
       <div class="section-title">Приложение</div>
       <div class="panel">
-        <p class="small muted" style="margin:0 0 12px;line-height:1.45">Версия интерфейса: v${esc(VER)}. Темы с текстурами ~0.3–0.6 МБ. После обновления удали тему и скачай снова — так подтянется texture.png.</p>
+        <p class="small muted" style="margin:0 0 12px;line-height:1.45">Версия интерфейса: v${esc(VER)}. У скачанных тем нажми «Обновить пакет», чтобы подтянуть текстуры. Активную тему тоже можно удалить.</p>
         <button type="button" class="btn secondary block" id="themes-reload">Обновить каталог тем</button>
       </div>
     `;
@@ -1418,6 +1419,25 @@
           save();
         } catch (e) {
           alert("Не удалилось: " + ((e && e.message) || e));
+        }
+        themeBusyId = "";
+        render();
+      });
+    });
+
+    app.querySelectorAll("[data-theme-redownload]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.dataset.themeRedownload;
+        if (!id || themeBusyId) return;
+        themeBusyId = id;
+        render();
+        try {
+          await BossThemes.download(id);
+          await BossThemes.markInstalled(state, id);
+          await BossThemes.apply(id, state);
+          save();
+        } catch (e) {
+          alert("Не обновилось: " + ((e && e.message) || e));
         }
         themeBusyId = "";
         render();

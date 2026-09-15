@@ -1,4 +1,4 @@
-const CACHE = "bigbossyan-v34";
+﻿const CACHE = "bigbossyan-v35";
 const ASSETS = [
   "./",
   "./index.html",
@@ -39,7 +39,13 @@ self.addEventListener("install", (e) => {
 
 self.addEventListener("activate", (e) => {
   e.waitUntil(
-    caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+    caches.keys().then((keys) =>
+      Promise.all(
+        keys
+          .filter((k) => k !== CACHE && k.indexOf("bigbossyan-themes-") !== 0)
+          .map((k) => caches.delete(k))
+      )
+    )
   );
   self.clients.claim();
 });

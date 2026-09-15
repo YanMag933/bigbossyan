@@ -26,7 +26,7 @@ html[data-theme="ember-lava"] {
   --hero-title: linear-gradient(180deg, #fff6ec 5%, #ff9a2e 55%, #ff4500 100%);
   --icon-glow: drop-shadow(0 0 10px rgba(255,120,0,0.55));
   --body-bg: linear-gradient(180deg, rgba(10,5,2,0.45), rgba(10,5,2,0.78)), #0a0502;
-  --surface-opacity: 0.48;
+  --surface-opacity: 0.62;
   --surface-blend: soft-light;
   --noise-opacity: 0.02;
 }

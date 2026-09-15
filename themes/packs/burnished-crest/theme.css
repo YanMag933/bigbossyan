@@ -26,7 +26,7 @@ html[data-theme="burnished-crest"] {
   --hero-title: linear-gradient(180deg, #fff6e0 0%, #d4a43a 90%);
   --icon-glow: drop-shadow(0 0 8px rgba(240,200,100,0.45));
   --body-bg: linear-gradient(180deg, rgba(12,10,6,0.5), rgba(12,10,6,0.8)), #0c0a06;
-  --surface-opacity: 0.4;
+  --surface-opacity: 0.56;
   --surface-blend: soft-light;
   --noise-opacity: 0.03;
 }

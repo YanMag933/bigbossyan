@@ -26,7 +26,7 @@ html[data-theme="obsidian-script"] {
   --hero-title: linear-gradient(180deg, #fff 0%, #ffe7a8 65%, #d4b24a 100%);
   --icon-glow: drop-shadow(0 0 8px rgba(255,231,168,0.45));
   --body-bg: linear-gradient(180deg, rgba(3,3,3,0.5), rgba(3,3,3,0.78)), #030303;
-  --surface-opacity: 0.38;
+  --surface-opacity: 0.55;
   --surface-blend: soft-light;
   --noise-opacity: 0.025;
 }

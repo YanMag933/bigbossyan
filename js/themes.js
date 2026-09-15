@@ -1,8 +1,9 @@
 ﻿window.BossThemes = {
-  CACHE: "bigbossyan-themes-v2",
+  CACHE: "bigbossyan-themes-v3",
   STYLE_ID: "boss-theme-pack",
   MANIFEST_URL: "./themes/manifest.json",
   BUILTIN: "classic",
+  PACK_REV: 3,
 
   _manifest: null,
   _busy: null,
@@ -24,7 +25,7 @@
   },
 
   packUrl(id, file) {
-    return "./themes/packs/" + encodeURIComponent(id) + "/" + file;
+    return new URL("./themes/packs/" + encodeURIComponent(id) + "/" + file, location.href).href;
   },
 
   async loadManifest(force) {
@@ -45,11 +46,16 @@
   ensureState(state) {
     if (!state.ui) state.ui = {};
     if (!state.ui.themes) {
-      state.ui.themes = { active: this.BUILTIN, installed: [] };
+      state.ui.themes = { active: this.BUILTIN, installed: [], rev: 0 };
     }
     if (!Array.isArray(state.ui.themes.installed)) state.ui.themes.installed = [];
     if (!state.ui.themes.active) state.ui.themes.active = this.BUILTIN;
+    if (typeof state.ui.themes.rev !== "number") state.ui.themes.rev = 0;
     return state.ui.themes;
+  },
+
+  needsRefresh(state) {
+    return this.ensureState(state).rev < this.PACK_REV;
   },
 
   isInstalled(state, id) {
@@ -69,6 +75,11 @@
     return !!hit;
   },
 
+  async hasTexture(id) {
+    const cache = await this.openCache();
+    return !!(await cache.match(this.packUrl(id, "texture.jpg")));
+  },
+
   revokeTexture() {
     if (this._textureUrl) {
       try {
@@ -83,7 +94,7 @@
     const url = this.packUrl(id, file);
     let res = await cache.match(url);
     if (!res) {
-      res = await fetch(url, { cache: "no-store" });
+      res = await fetch(url + (url.indexOf("?") >= 0 ? "&" : "?") + "t=" + Date.now(), { cache: "no-store" });
       if (!res.ok) return null;
       await cache.put(url, res.clone());
     }
@@ -95,7 +106,7 @@
     if (this._busy) throw new Error("Уже качается другая тема");
     this._busy = id;
     try {
-      const man = await this.loadManifest();
+      const man = await this.loadManifest(true);
       const pack = (man.packs || []).find((p) => p.id === id);
       if (!pack) throw new Error("Тема не найдена в облаке");
       const files = pack.files && pack.files.length ? pack.files : ["theme.css", "preview.svg", "texture.jpg"];
@@ -103,7 +114,7 @@
       let done = 0;
       for (const file of files) {
         const url = this.packUrl(id, file);
-        const res = await fetch(url + "?t=" + Date.now(), { cache: "no-store" });
+        const res = await fetch(url + (url.indexOf("?") >= 0 ? "&" : "?") + "t=" + Date.now(), { cache: "no-store" });
         if (!res.ok) throw new Error("Ошибка файла " + file + " (" + res.status + ")");
         await cache.put(url, res.clone());
         done += 1;
@@ -118,12 +129,12 @@
     if (id === this.BUILTIN) return;
     const cache = await this.openCache();
     const keys = await cache.keys();
-    const prefix = "/themes/packs/" + id + "/";
+    const needle = "/themes/packs/" + id + "/";
     await Promise.all(
       keys
         .filter((req) => {
           try {
-            return new URL(req.url).pathname.indexOf(prefix) >= 0;
+            return new URL(req.url).pathname.indexOf(needle) >= 0;
           } catch (_) {
             return false;
           }
@@ -141,6 +152,7 @@
   async markInstalled(state, id) {
     const t = this.ensureState(state);
     if (id !== this.BUILTIN && t.installed.indexOf(id) < 0) t.installed.push(id);
+    t.rev = this.PACK_REV;
   },
 
   async readCss(id) {
@@ -149,7 +161,7 @@
     const url = this.packUrl(id, "theme.css");
     let res = await cache.match(url);
     if (!res) {
-      res = await fetch(url, { cache: "no-store" });
+      res = await fetch(url + (url.indexOf("?") >= 0 ? "&" : "?") + "t=" + Date.now(), { cache: "no-store" });
       if (!res.ok) throw new Error("Тема не скачана");
       await cache.put(url, res.clone());
     }
@@ -182,16 +194,31 @@
       throw new Error("Сначала скачай тему");
     }
 
+    // Старые пакеты без текстуры / устаревший rev — тихо перекачать
+    if (!(await this.hasTexture(id)) || this.needsRefresh(state)) {
+      try {
+        await this.download(id);
+        await this.markInstalled(state, id);
+      } catch (_) {
+        /* offline — покажем что есть */
+      }
+    }
+
     let css = await this.readCss(id);
     const texBlob = await this.readCachedBlob(id, "texture.jpg");
     if (texBlob) {
       this._textureUrl = URL.createObjectURL(texBlob);
+      // только url() — в styles.css это background-image
       css +=
         '\nhtml[data-theme="' +
         id +
         '"]{--surface-overlay:url("' +
         this._textureUrl +
-        '") center / cover no-repeat;}';
+        '");}';
+      // Если в кэше старый CSS без opacity — текстура всё равно видна
+      if (css.indexOf("--surface-opacity") < 0) {
+        css += '\nhtml[data-theme="' + id + '"]{--surface-opacity:0.5;--surface-blend:soft-light;}';
+      }
     }
 
     const style = document.createElement("style");
