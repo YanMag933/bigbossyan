@@ -14,6 +14,14 @@ html[data-theme="obsidian-script"] {
   --gold-soft: rgba(212, 178, 74, 0.18);
   --btn-bg: linear-gradient(180deg, #fff1c0, #d4b24a 52%, #7a5c16);
   --btn-color: #141008;
+  --btn-text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.7),
+    0 -1px 0 rgba(60, 40, 0, 0.35),
+    0 2px 2px rgba(0, 0, 0, 0.28);
+  --btn-text-shadow-soft:
+    0 1px 0 rgba(0, 0, 0, 0.75),
+    0 -1px 0 rgba(255, 255, 255, 0.22),
+    0 2px 3px rgba(0, 0, 0, 0.45);
   --btn-shadow: inset 0 1px 0 rgba(255,255,255,0.6), 0 12px 28px rgba(212,178,74,0.35);
   --btn-secondary-bg: linear-gradient(180deg, #333, #1a1a1a);
   --panel-bg: linear-gradient(160deg, rgba(255,255,255,0.08), transparent 36%), linear-gradient(180deg, #1e1e1e, #0c0c0c);
@@ -39,16 +47,18 @@ html[data-theme="obsidian-script"] .btn:not(.ghost):not(.secondary) {
   background: var(--btn-bg);
   color: var(--btn-color);
   box-shadow: var(--btn-shadow);
-  text-shadow: none;
+  text-shadow: var(--btn-text-shadow);
 }
 html[data-theme="obsidian-script"] .btn.secondary {
   background: var(--btn-secondary-bg);
   color: var(--text);
+  text-shadow: var(--btn-text-shadow-soft);
   border: 1px solid var(--line-strong);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
 }
 html[data-theme="obsidian-script"] .btn.ghost {
   color: var(--text);
+  text-shadow: var(--btn-text-shadow-soft);
   border: 1px solid var(--line-strong);
   background: transparent;
 }

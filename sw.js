@@ -1,4 +1,4 @@
-const CACHE = "bigbossyan-v37";
+const CACHE = "bigbossyan-v38";
 const ASSETS = [
   "./",
   "./index.html",

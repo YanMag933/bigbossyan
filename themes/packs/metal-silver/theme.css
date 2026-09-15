@@ -14,6 +14,14 @@ html[data-theme="metal-silver"] {
   --gold-soft: rgba(208, 213, 220, 0.14);
   --btn-bg: linear-gradient(180deg, #ffffff, #c8ced6 48%, #6f7784);
   --btn-color: #0e1116;
+  --btn-text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.7),
+    0 -1px 0 rgba(60, 40, 0, 0.35),
+    0 2px 2px rgba(0, 0, 0, 0.28);
+  --btn-text-shadow-soft:
+    0 1px 0 rgba(0, 0, 0, 0.75),
+    0 -1px 0 rgba(255, 255, 255, 0.22),
+    0 2px 3px rgba(0, 0, 0, 0.45);
   --btn-shadow: inset 0 1px 0 rgba(255,255,255,0.8), 0 12px 26px rgba(0,0,0,0.45);
   --btn-secondary-bg: linear-gradient(180deg, #343b46, #1a1e24);
   --panel-bg: linear-gradient(155deg, rgba(255,255,255,0.12), transparent 38%), linear-gradient(180deg, #2a3038, #12161c);
@@ -39,16 +47,18 @@ html[data-theme="metal-silver"] .btn:not(.ghost):not(.secondary) {
   background: var(--btn-bg);
   color: var(--btn-color);
   box-shadow: var(--btn-shadow);
-  text-shadow: none;
+  text-shadow: var(--btn-text-shadow);
 }
 html[data-theme="metal-silver"] .btn.secondary {
   background: var(--btn-secondary-bg);
   color: var(--text);
+  text-shadow: var(--btn-text-shadow-soft);
   border: 1px solid var(--line-strong);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
 }
 html[data-theme="metal-silver"] .btn.ghost {
   color: var(--text);
+  text-shadow: var(--btn-text-shadow-soft);
   border: 1px solid var(--line-strong);
   background: transparent;
 }

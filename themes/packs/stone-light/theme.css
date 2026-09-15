@@ -16,6 +16,14 @@ html[data-theme="stone-light"] {
   --danger: #b12e2e;
   --btn-bg: linear-gradient(180deg, #3a4252, #232a36 55%, #12161e);
   --btn-color: #f8fafc;
+  --btn-text-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.7),
+    0 -1px 0 rgba(255, 255, 255, 0.28),
+    0 2px 3px rgba(0, 0, 0, 0.4);
+  --btn-text-shadow-soft:
+    0 1px 0 rgba(255, 255, 255, 0.75),
+    0 -1px 0 rgba(40, 35, 25, 0.28),
+    0 2px 2px rgba(40, 35, 25, 0.18);
   --btn-shadow: inset 0 1px 0 rgba(255,255,255,0.25), 0 12px 24px rgba(30,25,15,0.22);
   --btn-secondary-bg: linear-gradient(180deg, #efeae1, #ddd6ca);
   --panel-bg: linear-gradient(145deg, rgba(255,255,255,0.95), transparent 40%), linear-gradient(180deg, #fffcf7, #ebe4d8);
@@ -41,16 +49,18 @@ html[data-theme="stone-light"] .btn:not(.ghost):not(.secondary) {
   background: var(--btn-bg);
   color: var(--btn-color);
   box-shadow: var(--btn-shadow);
-  text-shadow: none;
+  text-shadow: var(--btn-text-shadow-soft);
 }
 html[data-theme="stone-light"] .btn.secondary {
   background: var(--btn-secondary-bg);
   color: var(--text);
+  text-shadow: var(--btn-text-shadow-soft);
   border: 1px solid var(--line-strong);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
 }
 html[data-theme="stone-light"] .btn.ghost {
   color: var(--text);
+  text-shadow: var(--btn-text-shadow-soft);
   border: 1px solid var(--line-strong);
   background: transparent;
 }

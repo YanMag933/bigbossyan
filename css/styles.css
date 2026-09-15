@@ -27,6 +27,14 @@
   --btn-bg: linear-gradient(180deg, var(--gold-bright), var(--gold));
   --btn-color: #14110a;
   --btn-shadow: 0 10px 28px rgba(212, 175, 55, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  --btn-text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.7),
+    0 -1px 0 rgba(60, 40, 0, 0.35),
+    0 2px 2px rgba(0, 0, 0, 0.28);
+  --btn-text-shadow-soft:
+    0 1px 0 rgba(0, 0, 0, 0.75),
+    0 -1px 0 rgba(255, 255, 255, 0.22),
+    0 2px 3px rgba(0, 0, 0, 0.45);
   --btn-secondary-bg: linear-gradient(180deg, #323232, #222);
   --metric-bg: linear-gradient(160deg, rgba(255, 255, 255, 0.03), transparent 50%), rgba(0, 0, 0, 0.3);
   --metric-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 8px 20px rgba(0, 0, 0, 0.25);
@@ -457,6 +465,7 @@ button, input, select, textarea {
   cursor: pointer;
   transition: transform 0.15s ease, filter 0.15s ease, box-shadow 0.2s ease;
   box-shadow: var(--btn-shadow);
+  text-shadow: var(--btn-text-shadow);
   position: relative;
   overflow: hidden;
 }
@@ -482,6 +491,7 @@ button, input, select, textarea {
   border: 1px solid var(--line-strong);
   color: var(--text);
   box-shadow: none;
+  text-shadow: var(--btn-text-shadow-soft);
 }
 
 .btn.ghost::before {
@@ -496,6 +506,7 @@ button, input, select, textarea {
   border: 1px solid var(--line);
   color: var(--text);
   box-shadow: none;
+  text-shadow: var(--btn-text-shadow-soft);
 }
 
 .progress-ring-wrap {
