@@ -27,8 +27,8 @@ html[data-theme="stone-light"] {
   --topbar-scrim: linear-gradient(180deg, rgba(247,244,238,0.98) 0%, rgba(247,244,238,0.88) 70%, transparent);
   --hero-title: linear-gradient(180deg, #17150f 10%, #2c3340 100%);
   --icon-glow: drop-shadow(0 0 6px rgba(30,35,45,0.25));
-  --body-bg: linear-gradient(180deg, rgba(247,244,238,0.72), rgba(230,225,215,0.88)), #e6e1d7;
-  --surface-opacity: 0.5;
+  --body-bg: linear-gradient(180deg, rgba(247,244,238,0.35), rgba(230,225,215,0.55)), #e6e1d7;
+  --surface-opacity: 0.85;
   --surface-blend: multiply;
   --noise-opacity: 0.02;
 }

@@ -3,7 +3,7 @@
   STYLE_ID: "boss-theme-pack",
   MANIFEST_URL: "./themes/manifest.json",
   BUILTIN: "classic",
-  PACK_REV: 4,
+  PACK_REV: 5,
 
   _manifest: null,
   _busy: null,
@@ -90,17 +90,30 @@
     const layer = document.getElementById("boss-theme-texture");
     if (layer) layer.remove();
     try {
-      document.documentElement.style.removeProperty("--surface-overlay");
-      document.documentElement.style.removeProperty("--surface-opacity");
-      document.documentElement.style.removeProperty("--surface-blend");
+      const root = document.documentElement;
+      [
+        "--surface-overlay",
+        "--surface-opacity",
+        "--surface-blend",
+        "--texture-url",
+        "--texture-btn-opacity",
+        "--texture-panel-opacity",
+        "--texture-icon-opacity",
+      ].forEach((k) => root.style.removeProperty(k));
     } catch (_) {}
   },
 
   paintTexture(blobUrl, opacity) {
     const root = document.documentElement;
-    root.style.setProperty("--surface-overlay", 'url("' + blobUrl + '")');
-    root.style.setProperty("--surface-opacity", String(opacity == null ? 0.62 : opacity));
+    const op = opacity == null ? 0.9 : opacity;
+    const url = 'url("' + blobUrl + '")';
+    root.style.setProperty("--texture-url", url);
+    root.style.setProperty("--surface-overlay", url);
+    root.style.setProperty("--surface-opacity", String(op));
     root.style.setProperty("--surface-blend", "overlay");
+    root.style.setProperty("--texture-btn-opacity", "0.55");
+    root.style.setProperty("--texture-panel-opacity", "0.3");
+    root.style.setProperty("--texture-icon-opacity", "0.5");
 
     let layer = document.getElementById("boss-theme-texture");
     if (!layer) {
@@ -109,8 +122,9 @@
       layer.setAttribute("aria-hidden", "true");
       document.body.insertBefore(layer, document.body.firstChild);
     }
-    layer.style.backgroundImage = 'url("' + blobUrl + '")';
-    layer.style.opacity = String(opacity == null ? 0.62 : opacity);
+    layer.style.backgroundImage = url;
+    layer.style.opacity = String(op);
+    layer.style.mixBlendMode = "overlay";
   },
 
   async readCachedBlob(id, file) {
@@ -232,7 +246,7 @@
     const texBlob = await this.readCachedBlob(id, "texture.jpg");
     if (texBlob && texBlob.size > 0) {
       this._textureUrl = URL.createObjectURL(texBlob);
-      this.paintTexture(this._textureUrl, 0.62);
+      this.paintTexture(this._textureUrl, 0.9);
     }
 
     const style = document.createElement("style");

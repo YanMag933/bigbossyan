@@ -25,9 +25,9 @@ html[data-theme="glass-prism"] {
   --topbar-scrim: linear-gradient(180deg, rgba(4,6,12,0.96) 0%, rgba(4,6,12,0.84) 70%, transparent);
   --hero-title: linear-gradient(90deg, #ffffff 0%, #b8f7ff 35%, #c084fc 70%, #f9a8d4 100%);
   --icon-glow: drop-shadow(0 0 10px rgba(46,230,255,0.5));
-  --body-bg: linear-gradient(180deg, rgba(4,6,12,0.55), rgba(4,6,12,0.82)), #04060c;
-  --surface-opacity: 0.55;
-  --surface-blend: soft-light;
+  --body-bg: linear-gradient(180deg, rgba(4,6,12,0.22), rgba(4,6,12,0.45)), #04060c;
+  --surface-opacity: 0.88;
+  --surface-blend: overlay;
   --noise-opacity: 0.02;
 }
 html[data-theme="glass-prism"] body {

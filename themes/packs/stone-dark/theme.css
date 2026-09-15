@@ -25,9 +25,9 @@ html[data-theme="stone-dark"] {
   --topbar-scrim: linear-gradient(180deg, rgba(11,13,16,0.96) 0%, rgba(11,13,16,0.84) 70%, transparent);
   --hero-title: linear-gradient(180deg, #ffffff 0%, #d7dee5 85%);
   --icon-glow: drop-shadow(0 0 8px rgba(220,230,240,0.4));
-  --body-bg: linear-gradient(180deg, rgba(11,13,16,0.5), rgba(11,13,16,0.8)), #0b0d10;
-  --surface-opacity: 0.56;
-  --surface-blend: soft-light;
+  --body-bg: linear-gradient(180deg, rgba(11,13,16,0.2), rgba(11,13,16,0.42)), #0b0d10;
+  --surface-opacity: 0.88;
+  --surface-blend: overlay;
   --noise-opacity: 0.02;
 }
 html[data-theme="stone-dark"] body {

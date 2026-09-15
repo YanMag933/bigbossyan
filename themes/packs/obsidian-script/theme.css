@@ -25,9 +25,9 @@ html[data-theme="obsidian-script"] {
   --topbar-scrim: linear-gradient(180deg, rgba(3,3,3,0.97) 0%, rgba(3,3,3,0.85) 70%, transparent);
   --hero-title: linear-gradient(180deg, #fff 0%, #ffe7a8 65%, #d4b24a 100%);
   --icon-glow: drop-shadow(0 0 8px rgba(255,231,168,0.45));
-  --body-bg: linear-gradient(180deg, rgba(3,3,3,0.5), rgba(3,3,3,0.78)), #030303;
-  --surface-opacity: 0.55;
-  --surface-blend: soft-light;
+  --body-bg: linear-gradient(180deg, rgba(3,3,3,0.2), rgba(3,3,3,0.42)), #030303;
+  --surface-opacity: 0.88;
+  --surface-blend: overlay;
   --noise-opacity: 0.025;
 }
 html[data-theme="obsidian-script"] body {

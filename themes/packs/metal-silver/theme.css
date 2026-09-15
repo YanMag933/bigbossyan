@@ -25,9 +25,9 @@ html[data-theme="metal-silver"] {
   --topbar-scrim: linear-gradient(180deg, rgba(10,12,16,0.96) 0%, rgba(10,12,16,0.84) 70%, transparent);
   --hero-title: linear-gradient(180deg, #ffffff 0%, #d0d5dc 85%);
   --icon-glow: drop-shadow(0 0 8px rgba(230,235,245,0.4));
-  --body-bg: linear-gradient(180deg, rgba(10,12,16,0.5), rgba(10,12,16,0.8)), #0a0c10;
-  --surface-opacity: 0.55;
-  --surface-blend: soft-light;
+  --body-bg: linear-gradient(180deg, rgba(10,12,16,0.2), rgba(10,12,16,0.42)), #0a0c10;
+  --surface-opacity: 0.88;
+  --surface-blend: overlay;
   --noise-opacity: 0.02;
 }
 html[data-theme="metal-silver"] body {
