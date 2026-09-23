@@ -81,7 +81,7 @@ window.Store = {
 
     // Один общий чат на проект (склеиваем старые free + openrouter)
     if (!state.chat || typeof state.chat !== "object") state.chat = {};
-    for (const pid of ["lifeRpg", "trailOn"]) {
+    for (const pid of ["lifeRpg", "trailOn", "kultProgulki"]) {
       const bucket = state.chat[pid];
       if (Array.isArray(bucket)) {
         state.chat[pid] = bucket;
@@ -100,7 +100,7 @@ window.Store = {
 
     // Заметки: строка → массив карточек
     if (!state.notes || typeof state.notes !== "object") state.notes = {};
-    for (const pid of ["lifeRpg", "trailOn"]) {
+    for (const pid of ["lifeRpg", "trailOn", "kultProgulki"]) {
       const n = state.notes[pid];
       if (typeof n === "string") {
         const body = n.trim();
@@ -134,13 +134,20 @@ window.Store = {
       if (state.ui.docPreview === undefined) state.ui.docPreview = null;
     }
 
+    if (!state.done || typeof state.done !== "object") state.done = {};
+    if (!state.overrides || typeof state.overrides !== "object") state.overrides = {};
+    for (const pid of ["lifeRpg", "trailOn", "kultProgulki"]) {
+      if (!state.done[pid] || typeof state.done[pid] !== "object") state.done[pid] = {};
+      if (!state.overrides[pid] || typeof state.overrides[pid] !== "object") state.overrides[pid] = {};
+    }
+
     if (!state.projectChat || typeof state.projectChat !== "object") state.projectChat = {};
-    for (const pid of ["lifeRpg", "trailOn"]) {
+    for (const pid of ["lifeRpg", "trailOn", "kultProgulki"]) {
       if (!Array.isArray(state.projectChat[pid])) state.projectChat[pid] = [];
     }
 
     if (!state.docArchive || typeof state.docArchive !== "object") state.docArchive = {};
-    for (const pid of ["lifeRpg", "trailOn"]) {
+    for (const pid of ["lifeRpg", "trailOn", "kultProgulki"]) {
       if (!Array.isArray(state.docArchive[pid])) state.docArchive[pid] = [];
     }
   },
@@ -149,22 +156,25 @@ window.Store = {
     return {
       activeProject: "lifeRpg",
       tab: "hq",
-      done: { lifeRpg: {}, trailOn: {} },
-      notes: { lifeRpg: [], trailOn: [] },
-      overrides: { lifeRpg: {}, trailOn: {} },
+      done: { lifeRpg: {}, trailOn: {}, kultProgulki: {} },
+      notes: { lifeRpg: [], trailOn: [], kultProgulki: [] },
+      overrides: { lifeRpg: {}, trailOn: {}, kultProgulki: {} },
       wins: [],
       installDismissed: false,
       chat: {
         lifeRpg: [],
         trailOn: [],
+        kultProgulki: [],
       },
       projectChat: {
         lifeRpg: [],
         trailOn: [],
+        kultProgulki: [],
       },
       docArchive: {
         lifeRpg: [],
         trailOn: [],
+        kultProgulki: [],
       },
       ai: {
         provider: "free",

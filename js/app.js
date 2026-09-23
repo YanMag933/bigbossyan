@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const VER = "41";
+  const VER = "42";
   let state = Store.load();
   BossDocs.syncAll(state);
   Store.save(state);
@@ -193,18 +193,18 @@
   }
 
   function projectSwitchHtml() {
-    const a = ProjectLive.get("lifeRpg", state);
-    const b = ProjectLive.get("trailOn", state);
+    const ids = ["lifeRpg", "trailOn", "kultProgulki"];
     return `
-      <div class="project-switch" role="tablist" aria-label="Проекты">
-        <button type="button" class="project-btn ${state.activeProject === "lifeRpg" ? "active" : ""}" data-project="lifeRpg">
-          <strong>${esc(a.name)}</strong>
-          <span>${esc(a.short)}</span>
-        </button>
-        <button type="button" class="project-btn ${state.activeProject === "trailOn" ? "active" : ""}" data-project="trailOn">
-          <strong>${esc(b.name)}</strong>
-          <span>${esc(b.short)}</span>
-        </button>
+      <div class="project-switch project-switch-3" role="tablist" aria-label="Проекты">
+        ${ids
+          .map((id) => {
+            const p = ProjectLive.get(id, state);
+            return `<button type="button" class="project-btn ${state.activeProject === id ? "active" : ""}" data-project="${esc(id)}">
+          <strong>${esc(p.name)}</strong>
+          <span>${esc(p.short)}</span>
+        </button>`;
+          })
+          .join("")}
       </div>`;
   }
 
@@ -294,8 +294,18 @@
     const p = project();
     const prog = Store.progress(p.id, state);
     const next = Store.nextTasks(p.id, state, 5);
-    const otherId = p.id === "lifeRpg" ? "trailOn" : "lifeRpg";
-    const otherProg = Store.progress(otherId, state);
+    const otherIds = ["lifeRpg", "trailOn", "kultProgulki"].filter((id) => id !== p.id);
+    const otherCards = otherIds
+      .map((otherId) => {
+        const otherProg = Store.progress(otherId, state);
+        const other = ProjectLive.get(otherId, state);
+        return `<button type="button" class="metric-btn" data-project="${esc(otherId)}">
+            <div class="label">Другой проект</div>
+            <div class="value" style="font-size:16px">${esc(other.name)}</div>
+            <div class="note">${otherProg.pct}% · ${otherProg.done}/${otherProg.total}</div>
+          </button>`;
+      })
+      .join("");
     const wins = state.wins.filter((w) => w.projectId === p.id).slice(0, 5);
     const circ = 2 * Math.PI * 44;
     const offset = circ - (prog.pct / 100) * circ;
@@ -329,10 +339,17 @@
             <div class="tiny muted">Взвешенный прогресс плана</div>
             <div style="margin:8px 0 12px;font-size:14px;line-height:1.4">${esc(p.oneLiner)}</div>
             <div class="bar"><i style="width:${prog.pct}%"></i></div>
-            <div class="small muted" style="margin-top:8px">Второй проект: ${esc(ProjectLive.get(otherId, state).name)} — ${otherProg.pct}%</div>
+            <div class="small muted" style="margin-top:8px">Другие: ${otherIds
+              .map((id) => {
+                const op = Store.progress(id, state);
+                return `${esc(ProjectLive.get(id, state).name)} ${op.pct}%`;
+              })
+              .join(" · ")}</div>
           </div>
         </div>
       </div>
+
+      <div class="metrics" style="margin-top:12px">${otherCards}</div>
 
       <div class="section-title">Сделать дальше</div>
       <div class="stack">

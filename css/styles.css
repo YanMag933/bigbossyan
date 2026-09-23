@@ -228,6 +228,23 @@ button, input, select, textarea {
   border-radius: 16px;
 }
 
+.project-switch-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.project-switch-3 .project-btn {
+  padding: 10px 6px;
+}
+
+.project-switch-3 .project-btn strong {
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.project-switch-3 .project-btn span {
+  font-size: 8px;
+}
+
 .chat-mode-switch {
   margin-top: -6px;
 }
