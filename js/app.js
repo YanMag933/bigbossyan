@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const VER = "42";
+  const VER = "43";
   let state = Store.load();
   BossDocs.syncAll(state);
   Store.save(state);
@@ -1069,8 +1069,9 @@
 
       <div class="section-title">Приложение</div>
       <div class="panel">
-        <p class="small muted" style="margin:0 0 12px;line-height:1.45">Версия интерфейса: v${esc(VER)}. У скачанных тем нажми «Обновить пакет», чтобы подтянуть текстуры. Активную тему тоже можно удалить.</p>
-        <button type="button" class="btn secondary block" id="themes-reload">Обновить каталог тем</button>
+        <p class="small muted" style="margin:0 0 12px;line-height:1.45">Версия интерфейса: v${esc(VER)}. Кнопка ниже сбрасывает кэш и service worker, затем открывает свежую сборку с сервера. Прогресс, заметки и темы на телефоне не трогаются.</p>
+        <button type="button" class="btn block" id="app-update-btn">Обновить приложение</button>
+        <button type="button" class="btn secondary block" id="themes-reload" style="margin-top:8px">Обновить каталог тем</button>
       </div>
     `;
   }
@@ -1206,6 +1207,34 @@
     }
     docsBusy = false;
     render();
+  }
+
+  async function forceAppUpdate() {
+    const btn = document.getElementById("app-update-btn");
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "Обновляю…";
+    }
+    try {
+      try {
+        localStorage.removeItem("bigbossyan-ver");
+      } catch (_) {}
+      if ("serviceWorker" in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map((r) => r.unregister()));
+      }
+      if (window.caches) {
+        const keys = await caches.keys();
+        await Promise.all(
+          keys
+            .filter((k) => String(k).indexOf("bigbossyan-themes-") !== 0)
+            .map((k) => caches.delete(k))
+        );
+      }
+    } catch (_) {
+      /* всё равно уйдём на reset */
+    }
+    location.replace("./reset.html?t=" + Date.now());
   }
 
   function bindView() {
@@ -1554,6 +1583,14 @@
         themesLoading = false;
         BossThemes._manifest = null;
         render();
+      });
+    }
+
+    const appUpdateBtn = document.getElementById("app-update-btn");
+    if (appUpdateBtn) {
+      appUpdateBtn.addEventListener("click", () => {
+        if (!confirm("Обновить приложение до свежей версии с сайта? Прогресс и заметки сохранятся.")) return;
+        forceAppUpdate();
       });
     }
   }
