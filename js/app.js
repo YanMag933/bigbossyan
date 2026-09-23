@@ -349,7 +349,7 @@
         </div>
       </div>
 
-      <div class="metrics" style="margin-top:12px">${otherCards}</div>
+      <div class="metric-grid" style="margin-top:12px">${otherCards}</div>
 
       <div class="section-title">Сделать дальше</div>
       <div class="stack">
